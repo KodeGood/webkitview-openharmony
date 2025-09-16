@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Copyright (c) 2022 Huawei Device Co., Ltd.
+
+     Licensed under the Apache License, Version 2.0 (the "License");
+     you may not use this file except in compliance with the License.
+     You may obtain a copy of the License at
+
+          http://www.apache.org/licenses/LICENSE-2.0
+
+     Unless required by applicable law or agreed to in writing, software
+     distributed under the License is distributed on an "AS IS" BASIS,
+     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     See the License for the specific language governing permissions and
+     limitations under the License.
+-->
+<Memmgr>
+  <availBufferConfig>
+      <availBuffer>300</availBuffer>
+      <minAvailBuffer>250</minAvailBuffer>
+      <highAvailBuffer>350</highAvailBuffer>
+      <swapReserve>200</swapReserve>
+  </availBufferConfig>
+  <reclaimConfig>
+    <ZswapdParam id="1">
+        <minScore>0</minScore>
+        <maxScore>1000</maxScore>
+        <mem2zramRatio>60</mem2zramRatio>
+        <zram2ufsRatio>10</zram2ufsRatio>
+        <refaultThreshold>50</refaultThreshold>
+    </ZswapdParam>
+  </reclaimConfig>
+  <reclaimPriorityConfig>
+    <killalbeSystemApps>
+      <killableSysApp></killableSysApp>
+    </killalbeSystemApps>
+    <importantBgApps>
+      <importantBgApp>
+            <procName>default</procName>
+            <minPriority>400</minPriority>
+      </importantBgApp>
+      <importantBgApp>
+            <procName>com.kodegood.webkitview</procName>
+            <minPriority>-1000</minPriority>
+      </importantBgApp>
+    </importantBgApps>
+  </reclaimPriorityConfig>
+  <systemMemoryLevelConfig>
+      <purgeable>1024</purgeable>
+      <moderate>800</moderate>
+      <low>700</low>
+      <critical>600</critical>
+  </systemMemoryLevelConfig>
+  <killConfig>
+      <killLevel id="1">
+          <memoryMB>500</memoryMB>
+          <minPriority>400</minPriority>
+      </killLevel>
+      <killLevel id="2">
+          <memoryMB>400</memoryMB>
+          <minPriority>300</minPriority>
+      </killLevel>
+      <killLevel id="3">
+          <memoryMB>300</memoryMB>
+          <minPriority>200</minPriority>
+      </killLevel>
+      <killLevel id="4">
+          <memoryMB>200</memoryMB>
+          <minPriority>100</minPriority>
+      </killLevel>
+      <killLevel id="5">
+          <memoryMB>100</memoryMB>
+          <minPriority>0</minPriority>
+      </killLevel>
+  </killConfig>
+  <nandLifeConfig>
+    <dailySwapOutQuotaMB>0</dailySwapOutQuotaMB>
+    <totalSwapOutQuotaMB>0</totalSwapOutQuotaMB>
+  </nandLifeConfig>
+  <switchConfig>
+    <bigMemKillSwitch>0</bigMemKillSwitch>
+  </switchConfig>
+  <purgeablememConfig>
+    <purgeWhiteAppList>
+      <procName>default</procName>
+    </purgeWhiteAppList>
+  </purgeablememConfig>
+</Memmgr>

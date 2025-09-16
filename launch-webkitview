@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# Launches given application.
+#
+# Usage:
+#   ./scripts/launchApp.sh [bundleName] [abilityName]
+#
+# Env:
+#   BUNDLE_NAME          (fallback if 3rd arg omitted; default: com.kodegood.webkitview)
+#   ABILITY_NAME         (fallback if 4th arg omitted; default: EntryAbility)
+
+set -Eeuo pipefail
+
+die(){ echo "ERROR: $*" >&2; exit 2; }
+say(){ printf "\n==> %s\n" "$*"; }
+need(){ command -v "$1" >/dev/null 2>&1 || die "Missing '$1' in PATH"; }
+
+# ---------- Defaults ----------
+BUNDLE_NAME="${3:-${BUNDLE_NAME:-com.kodegood.webkitview}}"
+ABILITY_NAME="${4:-${ABILITY_NAME:-EntryAbility}}"
+
+need hdc
+HDC_CMD=(hdc)
+if [[ -n "${HDC_TARGET:-}" ]]; then HDC_CMD+=( -t "$HDC_TARGET" ); fi
+
+# ---------- Stop the app ----------
+say "Stopping previous: ${BUNDLE_NAME}"
+"${HDC_CMD[@]}" shell aa force-stop "$BUNDLE_NAME" > /dev/null 2>&1
+
+sleep 1
+
+# ---------- Launch the app ----------
+say "Launching: ${BUNDLE_NAME}/${ABILITY_NAME}"
+set +e
+"${HDC_CMD[@]}" shell aa start -a "$ABILITY_NAME" -b "$BUNDLE_NAME"
+launch_rc=$?
+set -e
+
+if [[ $launch_rc -ne 0 ]]; then
+  die "Launch failed (exit $launch_rc). Verify bundle/ability names or run: hdc shell bm dump -a"
+fi
+
+say "Launch OK."
+

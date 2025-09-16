@@ -1,0 +1,180 @@
+#!/usr/bin/env bash
+# Signs an unsigned HAP using artifacts from .autosign, installs it.
+# Defaults if args omitted:
+#   in  -> entry/build/default/outputs/default/entry-default-unsigned.hap
+#   out -> entry/build/default/outputs/default/entry-default-signed.hap
+#
+# Usage:
+#   ./install-webkitview.sh [unsigned.hap] [signed.hap] [bundleName] [abilityName]
+#
+# Env:
+#   AUTOSIGN_DIR         (default: .autosign)
+#   OHOS_SDK_TOOLCHAINS  (fallback for hap-sign-tool.jar if not in .autosign)
+#   HDC_TARGET           (optional: connect key from `hdc list targets`)
+#   BUNDLE_NAME          (fallback if 3rd arg omitted; default: com.kodegood.webkitview)
+#   ABILITY_NAME         (fallback if 4th arg omitted; default: EntryAbility)
+
+set -Eeuo pipefail
+
+die(){ echo "ERROR: $*" >&2; exit 2; }
+say(){ printf "\n==> %s\n" "$*"; }
+need(){ command -v "$1" >/dev/null 2>&1 || die "Missing '$1' in PATH"; }
+
+# ---------- Defaults ----------
+AUTOSIGN_DIR="${AUTOSIGN_DIR:-.autosign}"
+HAP_IN="${1:-entry/build/default/outputs/default/entry-default-unsigned.hap}"
+HAP_OUT="${2:-entry/build/default/outputs/default/entry-default-signed.hap}"
+BUNDLE_NAME="${3:-${BUNDLE_NAME:-com.kodegood.webkitview}}"
+ABILITY_NAME="${4:-${ABILITY_NAME:-EntryAbility}}"
+
+# ---------- Ensure .autosign exists (generate if missing) ----------
+# We run from <project-folder>. If .autosign or its essentials are missing,
+# call tools/gen-signing-config.sh to create them.
+KS_FILE="${AUTOSIGN_DIR}/keystore.p12"
+CERT_CHAIN="${AUTOSIGN_DIR}/app_cert_chain.pem"
+PROFILE_P7B="${AUTOSIGN_DIR}/profile.p7b"
+CONF_JSON="${AUTOSIGN_DIR}/signing-configs.json"
+
+maybe_generate_autosign () {
+  local gen="./tools/gen-signing-config.sh"
+  if [[ -x "$gen" ]]; then
+    say "Generating signing config via $gen"
+    # Pass the same bundle/outdir/sdk path as the generator expects.
+    # It will also enforce UDIDs (your preflight).
+    "$gen" "$BUNDLE_NAME" "$AUTOSIGN_DIR" "${OHOS_SDK_TOOLCHAINS:-}" \
+      || die "Signing config generation failed."
+  else
+    die "Signing config missing and generator not found/executable: $gen"
+  fi
+}
+
+# Trigger generation if folder or any essential file missing
+if [[ ! -d "$AUTOSIGN_DIR" \
+   || ! -f "$KS_FILE" \
+   || ! -f "$CERT_CHAIN" \
+   || ! -f "$PROFILE_P7B" \
+   || ! -f "$CONF_JSON" ]]; then
+  say "Autosign artifacts not found. Creating them in '$AUTOSIGN_DIR'..."
+  maybe_generate_autosign
+fi
+
+# ---------- Locate hap-sign-tool ----------
+HAP_JAR=""
+if [[ -f "${AUTOSIGN_DIR}/hap-sign-tool.jar" ]]; then
+  HAP_JAR="${AUTOSIGN_DIR}/hap-sign-tool.jar"
+elif [[ -n "${OHOS_SDK_TOOLCHAINS:-}" && -f "${OHOS_SDK_TOOLCHAINS}/lib/hap-sign-tool.jar" ]]; then
+  HAP_JAR="${OHOS_SDK_TOOLCHAINS}/lib/hap-sign-tool.jar"
+else
+  die "hap-sign-tool.jar not found in ${AUTOSIGN_DIR} or \$OHOS_SDK_TOOLCHAINS/lib"
+fi
+
+# ---------- Required files from .autosign ----------
+KS_FILE="${AUTOSIGN_DIR}/keystore.p12"
+CERT_CHAIN="${AUTOSIGN_DIR}/app_cert_chain.pem"
+PROFILE_P7B="${AUTOSIGN_DIR}/profile.p7b"
+CONF_JSON="${AUTOSIGN_DIR}/signing-configs.json"
+
+[[ -f "$KS_FILE"     ]] || die "Missing keystore: $KS_FILE"
+[[ -f "$CERT_CHAIN"  ]] || die "Missing app cert chain: $CERT_CHAIN"
+[[ -f "$PROFILE_P7B" ]] || die "Missing profile: $PROFILE_P7B"
+[[ -f "$CONF_JSON"   ]] || die "Missing config: $CONF_JSON (run your gen-signing-config script first)"
+[[ -f "$HAP_IN"      ]] || die "Missing unsigned HAP: $HAP_IN"
+
+# ---------- Extract alias & passwords ----------
+KEY_ALIAS="" ; STORE_PWD="" ; KEY_PWD=""
+if command -v jq >/dev/null 2>&1; then
+  KEY_ALIAS="$(jq -r '.[0].material.keyAlias' "$CONF_JSON")"
+  STORE_PWD="$(jq -r '.[0].material.storePassword' "$CONF_JSON")"
+  KEY_PWD="$(jq -r '.[0].material.keyPassword' "$CONF_JSON")"
+elif command -v python3 >/dev/null 2>&1; then
+  readarray -t vals < <(python3 - <<'PY'
+import json,sys
+d=json.load(open(sys.argv[1]))
+m=d[0]["material"]
+print(m["keyAlias"]); print(m["storePassword"]); print(m["keyPassword"])
+PY
+"$CONF_JSON")
+  KEY_ALIAS="${vals[0]}" ; STORE_PWD="${vals[1]}" ; KEY_PWD="${vals[2]}"
+else
+  die "Need jq or python3 to read $CONF_JSON"
+fi
+[[ -n "$KEY_ALIAS" && -n "$STORE_PWD" && -n "$KEY_PWD" ]] || die "Failed to read alias/passwords from $CONF_JSON"
+
+# ---------- Ensure output dir ----------
+mkdir -p "$(dirname "$HAP_OUT")"
+
+# ---------- Sign ----------
+say "Signing HAP"
+echo "  inFile    : $HAP_IN"
+echo "  outFile   : $HAP_OUT"
+echo "  keystore  : $KS_FILE"
+echo "  keyAlias  : $KEY_ALIAS"
+echo "  appCert   : $CERT_CHAIN"
+echo "  profile   : $PROFILE_P7B"
+echo "  signer JAR: $HAP_JAR"
+
+java -jar "$HAP_JAR" sign-app \
+  -mode localSign \
+  -signAlg SHA256withECDSA \
+  -keystoreFile "$KS_FILE" -keystorePwd "$STORE_PWD" \
+  -keyAlias "$KEY_ALIAS" -keyPwd "$KEY_PWD" \
+  -appCertFile "$CERT_CHAIN" \
+  -profileFile "$PROFILE_P7B" \
+  -inFile "$HAP_IN" \
+  -outFile "$HAP_OUT"
+
+say "Signed OK -> $HAP_OUT"
+
+# ---------- Install via hdc (with auto-uninstall on signature mismatch) ----------
+need hdc
+HDC_CMD=(hdc)
+if [[ -n "${HDC_TARGET:-}" ]]; then HDC_CMD+=( -t "$HDC_TARGET" ); fi
+
+# ---------- Stop the app ----------
+say "Stopping previous: ${BUNDLE_NAME}"
+"${HDC_CMD[@]}" shell aa force-stop "$BUNDLE_NAME" > /dev/null 2>&1
+
+sleep 1
+
+install_once () {
+  pushd "$(dirname "$HAP_OUT")" >/dev/null
+  set +e
+  # Capture BOTH output and exit code
+  local out rc
+  out="$("${HDC_CMD[@]}" app install "$(basename "$HAP_OUT")" 2>&1)"
+  rc=$?
+  set -e
+  popd >/dev/null
+
+  # Show what hdc said (useful for debugging)
+  echo "$out"
+
+  # If hdc itself failed, propagate that
+  if [[ $rc -ne 0 ]]; then
+    return $rc
+  fi
+
+  # Some hdc versions return 0 even on install failure.
+  # Detect common failure patterns and force a non-zero exit.
+  if grep -qiE \
+      'error:|failed to install bundle|install sign info inconsistent|code:\s*95' \
+      <<<"$out"; then
+    return 64   # arbitrary non-zero to trigger uninstall/retry
+  fi
+
+  return 0
+}
+
+say "Installing: ${HDC_CMD[*]} app install $(basename "$HAP_OUT") (from $(dirname "$HAP_OUT"))"
+if ! install_once; then
+  say "Install failed. If an older app with a different signature exists, uninstalling: $BUNDLE_NAME"
+  set +e
+  "${HDC_CMD[@]}" uninstall "$BUNDLE_NAME" >/dev/null 2>&1
+  set -e
+  say "Retrying install…"
+  install_once || die "hdc app install failed again. Check device connection, profile UDIDs, bundleName match."
+fi
+say "Install complete."
+
+"${HDC_CMD[@]}" shell sync
+

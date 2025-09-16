@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+
+##
+# Copyright (C) 2025 Jani Hautakangas <jani@kodegood.com>
+#
+# This library is free software; you can redistribute it and/or
+# modify it under the terms of the GNU Lesser General Public
+# License as published by the Free Software Foundation; either
+# version 2.1 of the License, or (at your option) any later version.
+#
+# This library is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+# Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public
+# License along with this library; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
+##
+
+
+# hvigorw — lightweight wrapper for @ohos/hvigor
+set -euo pipefail
+
+# --- config ---------------------------------------------------------------
+OHOS_REGISTRY="${OHOS_REGISTRY:-https://repo.harmonyos.com/npm/}"
+APPEND_NPMRC="${HVIGORW_NO_NPMRC:-0}"   # set to 1 to skip touching .npmrc
+# -------------------------------------------------------------------------
+
+# Handle "clean" parameter
+if [[ "${1:-}" == "clean" ]]; then
+  rm -rf entry/build entry/.cxx
+  echo "Cleaned entry/build and entry/.cxx"
+  exit 0
+fi
+
+# Ensure node & npm exist
+command -v node >/dev/null 2>&1 || { echo "Error: node not found in PATH." >&2; exit 1; }
+command -v npm  >/dev/null 2>&1 || { echo "Error: npm not found in PATH." >&2; exit 1; }
+
+# Work in the directory of this script (project root)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
+# Add @ohos registry mapping if not present and not disabled
+ensure_scope_registry() {
+  if [ "$APPEND_NPMRC" != "1" ]; then
+    if [ ! -f .npmrc ] || ! grep -qE '^[[:space:]]*@ohos:registry=' .npmrc; then
+      echo "@ohos:registry=${OHOS_REGISTRY}" >> .npmrc
+    fi
+  fi
+}
+
+HVIGOR_LOCAL="node_modules/@ohos/hvigor/bin/hvigor.js"
+HVIGOR_CMD=""
+
+# 1) Use local hvigor if present
+if [ -f "$HVIGOR_LOCAL" ]; then
+  HVIGOR_CMD=(node "$HVIGOR_LOCAL")
+else
+  # 2) Try global hvigor
+  GLOBAL_ROOT="$(npm root -g 2>/dev/null || true)"
+  HVIGOR_GLOBAL="${GLOBAL_ROOT}/@ohos/hvigor/bin/hvigor.js"
+  if [ -n "$GLOBAL_ROOT" ] && [ -f "$HVIGOR_GLOBAL" ]; then
+    HVIGOR_CMD=(node "$HVIGOR_GLOBAL")
+  else
+    # 3) Install locally, then retry
+    echo "[@ohos/hvigor] not found locally or globally. Installing locally..."
+    ensure_scope_registry
+
+    if [ -f package.json ]; then
+      # Install declared deps first (fast path if you already listed hvigor)
+      npm install --no-audit --no-fund
+    fi
+
+    if [ ! -f "$HVIGOR_LOCAL" ]; then
+      # Fallback: ensure hvigor + plugin are present even if not in package.json
+      npm install -D @ohos/hvigor @ohos/hvigor-ohos-plugin --no-audit --no-fund
+    fi
+
+    if [ -f "$HVIGOR_LOCAL" ]; then
+      HVIGOR_CMD=(node "$HVIGOR_LOCAL")
+    elif [ -f "$HVIGOR_GLOBAL" ]; then
+      HVIGOR_CMD=(node "$HVIGOR_GLOBAL")
+    else
+      echo "Error: failed to acquire @ohos/hvigor. Check network and registry (@ohos:registry=${OHOS_REGISTRY})." >&2
+      exit 1
+    fi
+  fi
+fi
+
+# Run hvigor with all original args
+exec "${HVIGOR_CMD[@]}" "$@"
+
