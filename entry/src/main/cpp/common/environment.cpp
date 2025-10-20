@@ -46,6 +46,9 @@ void Initialize(const std::vector<std::string>& params)
 
     std::string gioModulesDir = params[4] + "/libs/arm64/gio/modules/";
     setenv("GIO_EXTRA_MODULES", gioModulesDir.c_str(), 1);
+
+    std::string injectedBundleDir = params[4] + "/libs/arm64/wpe-webkit-2.0/injected-bundle/";
+    setenv("WEBKIT_INJECTED_BUNDLE_PATH", injectedBundleDir.c_str(), 1);
 }
 
 } // namespace Environment
