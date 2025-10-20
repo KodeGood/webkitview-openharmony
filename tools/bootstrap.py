@@ -281,46 +281,6 @@ class Bootstrap:
         if missing:
             print("[sdk][warn] Missing from both runtime/lib and sdk/lib: " + ", ".join(missing))
 
-    def _link_entry_libs_to_runtime(self):
-        """
-        Make entry/libs/<abi> point to .webkit/current/<abi>/runtime/lib.
-        On Windows: try symlink; fallback to directory junction; finally copy.
-        """
-        target = self._current_link / self._abi / "runtime" / "lib"
-        self._entry_libs_abi.parent.mkdir(parents=True, exist_ok=True)
-
-        # Remove existing
-        if self._entry_libs_abi.is_symlink():
-            self._entry_libs_abi.unlink()
-        elif self._entry_libs_abi.exists():
-            try:
-                shutil.rmtree(self._entry_libs_abi)
-            except Exception:
-                pass
-
-        # Try symlink
-        try:
-            rel = os.path.relpath(target, start=self._entry_libs_abi.parent)
-            self._entry_libs_abi.symlink_to(rel, target_is_directory=True)
-            print(f"Linked (symlink): {self._entry_libs_abi} -> {rel}")
-            return
-        except (OSError, NotImplementedError):
-            pass
-
-        # Windows junction fallback
-        if os.name == "nt":
-            try:
-                subprocess.check_call(["cmd", "/c", "mklink", "/J",
-                                       str(self._entry_libs_abi), str(target)])
-                print(f"Linked (junction): {self._entry_libs_abi} -> {target}")
-                return
-            except Exception:
-                pass
-
-        # Last resort: copy (not ideal)
-        shutil.copytree(target, self._entry_libs_abi)
-        print(f"Copied (fallback): {self._entry_libs_abi} <- {target}")
-
     def _symbolize_file_path(self) -> Path:
         """Return the <project>/.symbolize-lib-paths file path."""
         return self._project_root / ".symbolize-lib-paths"
@@ -374,7 +334,6 @@ class Bootstrap:
         dev_t, run_t = self.fetch_packages(version)
         self.extract(dev_t, run_t)
         self.stage_direct_link_libs()
-        self._link_entry_libs_to_runtime()
         self._write_symbolize_lib_paths()
         print("Done.")
 
@@ -388,7 +347,6 @@ class Bootstrap:
         if not self._version_dir.exists():
             raise FileNotFoundError(f"Version directory not found: {self._version_dir}")
         self._update_current(self._current_link, self._version_dir)
-        self._link_entry_libs_to_runtime()
         print(f"Now using WebKit version: {version}")
 
     def clean(self, version: str):
