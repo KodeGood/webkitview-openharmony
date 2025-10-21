@@ -7,6 +7,7 @@ This repository provides a WebView implementation for the OpenHarmony platform u
 The project can be built using the public OpenHarmony 6.0 SDK.
 
 **Blog Post (Full Story & Details):**
+
 [WebKit for OpenHarmony](https://medium.com/kodegood/webkit-for-openharmony-3b612c27b958)
 
 **Note:** This project is in an early development stage. Many features are not yet implemented, and various issues are present. Please refer to the **Known Issues** section at the end of this document.
