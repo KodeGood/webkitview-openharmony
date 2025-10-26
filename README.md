@@ -71,6 +71,10 @@ cd webkit-openharmony-cerbero
 ./cerbero-uninstalled -c config/cross-ohos-arm64.cbc package -f wpewebkit
 ```
 
+WebKit patches are available at:
+
+[KodeGood/WebKit/wpewebkit-2.50.0-ohos](https://github.com/KodeGood/WebKit/tree/wpewebkit-2.50.0-ohos)
+
 ### 2. Install OpenHarmony SDK
 
 Download the OpenHarmony 6.0 SDK from the official OpenHarmony website. See [OpenHarmony-v6.0-release.md](https://gitee.com/openharmony/docs/blob/master/en/release-notes/OpenHarmony-v6.0-release.md) for more details.
