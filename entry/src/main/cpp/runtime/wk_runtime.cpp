@@ -33,6 +33,27 @@
 
 namespace {
 
+// Human-readable name for an OH_Ability_StartNativeChildProcess result code.
+const char* NativeChildProcessErrName(Ability_NativeChildProcess_ErrCode code)
+{
+    switch (code) {
+        case NCP_NO_ERROR:                       return "NCP_NO_ERROR";
+        case NCP_ERR_INVALID_PARAM:              return "NCP_ERR_INVALID_PARAM";
+        case NCP_ERR_NOT_SUPPORTED:              return "NCP_ERR_NOT_SUPPORTED";
+        case NCP_ERR_INTERNAL:                   return "NCP_ERR_INTERNAL";
+        case NCP_ERR_BUSY:                       return "NCP_ERR_BUSY";
+        case NCP_ERR_TIMEOUT:                    return "NCP_ERR_TIMEOUT";
+        case NCP_ERR_SERVICE_ERROR:              return "NCP_ERR_SERVICE_ERROR";
+        case NCP_ERR_MULTI_PROCESS_DISABLED:     return "NCP_ERR_MULTI_PROCESS_DISABLED";
+        case NCP_ERR_ALREADY_IN_CHILD:           return "NCP_ERR_ALREADY_IN_CHILD";
+        case NCP_ERR_MAX_CHILD_PROCESSES_REACHED:return "NCP_ERR_MAX_CHILD_PROCESSES_REACHED";
+        case NCP_ERR_LIB_LOADING_FAILED:         return "NCP_ERR_LIB_LOADING_FAILED";
+        case NCP_ERR_CONNECTION_FAILED:          return "NCP_ERR_CONNECTION_FAILED";
+        case NCP_ERR_CALLBACK_NOT_EXIST:         return "NCP_ERR_CALLBACK_NOT_EXIST";
+        default:                                 return "NCP_ERR_UNKNOWN";
+    }
+}
+
 AbilityRuntime_ErrorCode GetDir(AbilityRuntime_ErrorCode (*fn)(char*, int32_t, int32_t*), std::string& outStr)
 {
     const int32_t kMax = 64 * 1024;
@@ -151,6 +172,12 @@ int64_t WPELaunchProcess(void* /*backend*/, wpe_process_type wpeProcessType, voi
             Ability_NativeChildProcess_ErrCode ret =
                 OH_Ability_StartNativeChildProcess("libwebkit_web_process.so:Main",
                                                    localArgs, process_options, &pid_local);
+            if (ret != NCP_NO_ERROR) {
+                LOGE("OH_Ability_StartNativeChildProcess(web) failed: %{public}s (%{public}d), pid=%{public}d",
+                     NativeChildProcessErrName(ret), static_cast<int>(ret), pid_local);
+            } else {
+                LOGD("OH_Ability_StartNativeChildProcess(web) ok, pid=%{public}d", pid_local);
+            }
 
             free(localArgs.entryParams);
         } else if (wpeProcessType == WPE_PROCESS_TYPE_NETWORK) {
@@ -169,6 +196,12 @@ int64_t WPELaunchProcess(void* /*backend*/, wpe_process_type wpeProcessType, voi
             Ability_NativeChildProcess_ErrCode ret =
                 OH_Ability_StartNativeChildProcess("libwebkit_network_process.so:Main",
                                                    localArgs, process_options, &pid_local);
+            if (ret != NCP_NO_ERROR) {
+                LOGE("OH_Ability_StartNativeChildProcess(network) failed: %{public}s (%{public}d), pid=%{public}d",
+                     NativeChildProcessErrName(ret), static_cast<int>(ret), pid_local);
+            } else {
+                LOGD("OH_Ability_StartNativeChildProcess(network) ok, pid=%{public}d", pid_local);
+            }
 
             free(localArgs.entryParams);
         } else {
