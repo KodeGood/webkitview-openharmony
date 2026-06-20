@@ -441,6 +441,7 @@ void WKRuntime::UIProcessThread()
     webkit_web_context_new();
 
     uiReady_.store(true, std::memory_order_release);
+    FlushPendingInvokesOnUIReady();
     FlushPendingInitsOnUIReady();
 
     g_main_loop_run(*mainLoop_);
@@ -454,6 +455,37 @@ void WKRuntime::UIProcessThread()
 }
 
 void WKRuntime::DoInvoke(void (* callback)(void*), void* callbackData, void (* destroy)(void*))
+{
+    // The UI process thread creates mainContext_ asynchronously. Until it is
+    // ready, queue invokes instead of dereferencing a null mainContext_ (which
+    // otherwise crashes when ACE fires e.g. OnSurfaceCreated before init).
+    if (!uiReady_.load(std::memory_order_acquire)) {
+        std::lock_guard<std::mutex> lock(pendingInvokeMutex_);
+        // Re-check under the lock: FlushPendingInvokesOnUIReady() runs after
+        // uiReady_ is set, so anything queued here is guaranteed to be flushed.
+        if (!uiReady_.load(std::memory_order_acquire)) {
+            pendingInvokes_.push_back({callback, callbackData, destroy});
+            return;
+        }
+    }
+
+    DispatchInvoke(callback, callbackData, destroy);
+}
+
+void WKRuntime::FlushPendingInvokesOnUIReady()
+{
+    std::vector<PendingInvoke> invokes;
+    {
+        std::lock_guard<std::mutex> lock(pendingInvokeMutex_);
+        invokes.swap(pendingInvokes_);
+    }
+
+    for (const auto& invoke : invokes) {
+        DispatchInvoke(invoke.callback, invoke.callbackData, invoke.destroy);
+    }
+}
+
+void WKRuntime::DispatchInvoke(void (* callback)(void*), void* callbackData, void (* destroy)(void*))
 {
     struct GenericCallback {
         void (* callback)(void*);

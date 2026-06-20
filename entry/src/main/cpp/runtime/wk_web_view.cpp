@@ -340,6 +340,12 @@ void WKWebView::Init()
 
     if (nativeWindow_ != nullptr && wpeViewRenderer_ == nullptr)
         InitializeRenderer();
+
+    if (!pendingURL_.empty()) {
+        std::string url;
+        url.swap(pendingURL_);
+        LoadURL(url);
+    }
 }
 
 void WKWebView::InitializeRenderer()
@@ -370,7 +376,10 @@ void WKWebView::InitializeRenderer()
 void WKWebView::LoadURL(const std::string& url)
 {
     if (webView_ == nullptr) {
-        LOGE("WKWebView::LoadURL - webView_ is nullptr");
+        // Init() has not created webView_ yet; remember the URL and load it
+        // once Init() completes.
+        LOGD("WKWebView::LoadURL - webView_ not ready, deferring url: %{public}s", url.c_str());
+        pendingURL_ = url;
         return;
     }
     LOGD("WKWebView::LoadURL - url: %{public}s", url.c_str());

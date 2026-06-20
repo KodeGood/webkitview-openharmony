@@ -65,6 +65,14 @@ private:
     void UIProcessThread();
 
     void DoInvoke(void (* callback)(void*), void* callbackData, void (* destroy)(void*));
+    void DispatchInvoke(void (* callback)(void*), void* callbackData, void (* destroy)(void*));
+    void FlushPendingInvokesOnUIReady();
+
+    struct PendingInvoke {
+        void (* callback)(void*);
+        void* callbackData;
+        void (* destroy)(void*);
+    };
 
     std::thread uiProcessThread_;
     std::unique_ptr<GMainContext*> mainContext_ = nullptr;
@@ -73,6 +81,9 @@ private:
 
     std::mutex pendingInitMutex_;
     std::vector<std::string> pendingInitialization_;
+
+    std::mutex pendingInvokeMutex_;
+    std::vector<PendingInvoke> pendingInvokes_;
 
     WPEDisplay* wpeDisplay_ = nullptr;
 

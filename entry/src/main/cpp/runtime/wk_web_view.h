@@ -71,6 +71,11 @@ private:
     WebKitWebView* webView_ = nullptr;
     WPEViewOHOS* wpeView_ = nullptr;
 
+    // URL requested via LoadURL() before webView_ exists; loaded once Init()
+    // completes. ArkTS calls init() then loadURL() back-to-back, and the two
+    // can be dispatched out of order onto the WPE main loop.
+    std::string pendingURL_;
+
     std::shared_ptr<WPEViewOHOSRenderer> wpeViewRenderer_ = nullptr;
 
     std::vector<gulong> signalHandlers_;
