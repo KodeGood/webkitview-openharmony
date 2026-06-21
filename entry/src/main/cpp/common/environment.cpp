@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2025 Jani Hautakangas <jani@kodegood.com>
+ * Copyright (C) 2025-2026 Jani Hautakangas <jani@kodegood.com>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -49,6 +49,14 @@ void Initialize(const std::vector<std::string>& params)
 
     std::string injectedBundleDir = params[4] + "/libs/arm64/wpe-webkit-2.0/injected-bundle/";
     setenv("WEBKIT_INJECTED_BUNDLE_PATH", injectedBundleDir.c_str(), 1);
+
+    std::string gstPluginDir = params[4] + "/libs/arm64/gstreamer-1.0/";
+    setenv("GST_PLUGIN_SYSTEM_PATH", gstPluginDir.c_str(), 1);
+    setenv("GST_PLUGIN_PATH", gstPluginDir.c_str(), 1);
+
+    std::string gstRegistry = params[1] + "/gstreamer-1.0-registry.bin";
+    setenv("GST_REGISTRY", gstRegistry.c_str(), 1);
+    setenv("GST_REGISTRY_FORK", "no", 1);
 }
 
 } // namespace Environment

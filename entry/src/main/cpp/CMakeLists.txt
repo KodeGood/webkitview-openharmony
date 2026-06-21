@@ -111,3 +111,6 @@ file(COPY ${WEBKIT_INJECTED_BUNDLE} DESTINATION "${CMAKE_LIBRARY_OUTPUT_DIRECTOR
 
 file(GLOB WEBKIT_INJECTED_BUNDLE "${CMAKE_SOURCE_DIR}/../../../../.webkit/current/${OHOS_ARCH}/runtime/lib/wpe-webkit-2.0/injected-bundle/*.so")
 file(COPY ${WEBKIT_INJECTED_BUNDLE} DESTINATION "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/wpe-webkit-2.0/injected-bundle/")
+
+file(GLOB GSTREAMER_PLUGINS "${CMAKE_SOURCE_DIR}/../../../../.webkit/current/${OHOS_ARCH}/runtime/lib/gstreamer-1.0/*.so")
+file(COPY ${GSTREAMER_PLUGINS} DESTINATION "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/gstreamer-1.0/")
