@@ -6,9 +6,10 @@ This repository provides a WebView implementation for the OpenHarmony platform u
 
 The project can be built using the public OpenHarmony 6.0 SDK.
 
-**Blog Post (Full Story & Details):**
+**Blog Posts (Full Story & Details):**
 
-[WebKit for OpenHarmony](https://kodegood.com/blog/webkit-for-openharmony/)
+- [WebKit for OpenHarmony](https://kodegood.com/blog/webkit-for-openharmony/)
+- [Building WebKit for OpenHarmony with vcpkg](https://kodegood.com/blog/building-webkit-for-openharmony-with-vcpkg/)
 
 **Note:** This project is in an early development stage. Many features are not yet implemented, and various issues are present. Please refer to the **Known Issues** section at the end of this document.
 
@@ -60,16 +61,22 @@ tools/prepare-board.sh
 
 ## Setting Up Your Environment
 
-### 1. Build WPEWebKit for OpenHarmony (arm64)
+### 1. Build WebKit for OpenHarmony (arm64)
 
-Clone the repository and execute the following commands:
+WebKit and its full dependency tree are built with [vcpkg](https://github.com/microsoft/vcpkg).
+Clone the build repository and execute the following commands:
 
 ```bash
-git clone https://github.com/KodeGood/webkit-openharmony-cerbero.git
-cd webkit-openharmony-cerbero
-./cerbero-uninstalled -c config/cross-ohos-arm64.cbc bootstrap
-./cerbero-uninstalled -c config/cross-ohos-arm64.cbc package -f wpewebkit
+git clone https://github.com/KodeGood/webkit-openharmony-vcpkg.git
+cd webkit-openharmony-vcpkg
+export OHOS_SDK_ROOT=/path/to/ohos/sdk/<api>   # dir with native/build/cmake/ohos.toolchain.cmake
+export VCPKG_ROOT=$PWD/build/vcpkg
+python3 scripts/bootstrap_vcpkg.py             # clone + bootstrap vcpkg at the pinned baseline
+scripts/build.sh                               # vcpkg install (deps + webkit) then package -> dist/
 ```
+
+Artifacts land in `dist/`. See the build repository's
+[`README.md`](https://github.com/KodeGood/webkit-openharmony-vcpkg) for prerequisites and details.
 
 WebKit patches are available at:
 
@@ -94,14 +101,14 @@ export OHOS_SDK_TOOLCHAINS=${OHOS_BASE_SDK_HOME}/20/toolchains
 export PATH=$PATH:$OHOS_SDK_TOOLCHAINS:$OHOS_SDK_NATIVE/llvm/bin
 ```
 
-## Bootstrapping WebKitView with WPEWebKit
+## Bootstrapping WebKitView with WebKit
 
-WebKitView requires WPEWebKit to be built and installed as a sysroot in your project.
+WebKitView requires WebKit to be built and installed as a sysroot in your project.
 
 To automate this setup, run:
 
 ```bash
-python3 tools/bootstrap.py -a arm64 install -c <path-to-your-webkit-openharmony-cerbero>
+python3 tools/bootstrap.py -a arm64 install --vcpkg <path-to-your-webkit-openharmony-vcpkg>/dist
 ```
 
 ## Building and Running the WebKitView Application
