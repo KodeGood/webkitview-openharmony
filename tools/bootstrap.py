@@ -85,9 +85,14 @@ class Bootstrap:
         self._abi = ABI_MAP.get(self._in_arch, self._in_arch)
         self._version = args.get("version", self.default_version)
         self._external_cerbero_build_path = args.get("cerbero")
+        # Path to a vcpkg-produced dist/ tree (sibling webkit-openharmony-vcpkg/dist). When set,
+        # install() populates .webkit directly from it instead of the cerbero tarball flow.
+        self._vcpkg_dist_path = args.get("vcpkg")
 
         if self._external_cerbero_build_path:
             self._external_cerbero_build_path = os.path.realpath(self._external_cerbero_build_path)
+        if self._vcpkg_dist_path:
+            self._vcpkg_dist_path = os.path.realpath(self._vcpkg_dist_path)
 
         self._project_root = Path(__file__).resolve().parents[1]
 
@@ -294,16 +299,26 @@ class Bootstrap:
         """
         lines = []
 
-        # 1) Cerbero dist lib (only when cerbero root is provided)
+        # 1) Upstream WebKit lib dir holding unstripped .so (for faultlog symbolization).
         if self._cerbero_root:
             # Use the input arch token (arm64, aarch64, x86_64, amd64) as provided on CLI
             cerbero_dist_lib = Path(self._cerbero_root) / "build" / "dist" / f"ohos_{self._in_arch}" / "lib"
-            cerbero_line = cerbero_dist_lib.as_posix()
-            if not cerbero_line.endswith("/"):
-                cerbero_line += "/"
-            lines.append(cerbero_line)
+            line = cerbero_dist_lib.as_posix()
+            if not line.endswith("/"):
+                line += "/"
+            lines.append(line)
+        elif self._vcpkg_dist_path:
+            # dist/lib is stripped by package.py; symbolization needs the UNSTRIPPED libs from the
+            # vcpkg install tree (same build-id). The install tree is a sibling of dist/.
+            dist = Path(self._vcpkg_dist_path)
+            unstripped = dist.parent / "vcpkg_installed" / "arm64-ohos" / "lib"
+            chosen = unstripped if unstripped.is_dir() else (dist / "lib")
+            line = chosen.as_posix()
+            if not line.endswith("/"):
+                line += "/"
+            lines.append(line)
         else:
-            print("[symbolize][warn] --cerbero not provided; writing only the project intermediates path.")
+            print("[symbolize][warn] no source provided; writing only the project intermediates path.")
 
         # 2) Project intermediates libs (ABI-mapped)
         proj_intermediates = (
@@ -330,12 +345,98 @@ class Bootstrap:
 
     def install(self):
         """Fetch/copy, extract, stage direct-link libs, symlink the rest, set current, link entry/libs."""
+        if self._vcpkg_dist_path:
+            self.install_from_vcpkg()
+            return
         version = self._get_package_version("wpewebkit")
         dev_t, run_t = self.fetch_packages(version)
         self.extract(dev_t, run_t)
         self.stage_direct_link_libs()
         self._write_symbolize_lib_paths()
         print("Done.")
+
+    def install_from_vcpkg(self):
+        """
+        Populate .webkit/<version>/<abi>/{sdk,runtime} directly from a vcpkg dist/ tree.
+
+        vcpkg's .pc files are relocatable (prefix=${pcfiledir}/../..), so the SDK works wherever
+        it lands — no prefix rewriting needed. libwpe is built static (folded into the fat
+        libWPEWebKit-2.0.so), so there is no libwpe-1.0.so; we add a compat symlink in sdk/lib so
+        the wpe-1.0.pc `-lwpe-1.0` resolves to the fat lib (which exports the wpe_* API).
+        """
+        dist = Path(self._vcpkg_dist_path)
+        dist_lib = dist / "lib"
+        if not dist_lib.is_dir():
+            raise FileNotFoundError(f"vcpkg dist not found: expected {dist_lib}")
+
+        sdk = self._sdk_dir_versioned
+        rt = self._runtime_dir_versioned
+        for d in (sdk, rt):
+            if d.exists():
+                shutil.rmtree(d)
+            d.mkdir(parents=True, exist_ok=True)
+
+        # --- runtime: the entire lib/ tree (all .so + gstreamer-1.0/ + gio/modules/ +
+        #     wpe-webkit-2.0/), symlinks preserved so the versioned soname chains stay intact.
+        print(f"[vcpkg] runtime <- {dist_lib}")
+        shutil.copytree(dist_lib, rt / "lib", symlinks=True, dirs_exist_ok=True)
+
+        # --- sdk: headers, pkg-config, and the link-lib .so chains (top-level *.so* only).
+        (sdk / "lib").mkdir(parents=True, exist_ok=True)
+        for top in ("include", "share"):
+            src = dist / top
+            if src.is_dir():
+                print(f"[vcpkg] sdk/{top} <- {src}")
+                shutil.copytree(src, sdk / top, symlinks=True, dirs_exist_ok=True)
+        shutil.copytree(dist_lib / "pkgconfig", sdk / "lib" / "pkgconfig",
+                        symlinks=True, dirs_exist_ok=True)
+        n = 0
+        for so in dist_lib.glob("*.so*"):
+            if so.is_dir():
+                continue
+            dst = sdk / "lib" / so.name
+            if so.is_symlink():
+                rel = os.readlink(so)
+                if dst.is_symlink() or dst.exists():
+                    dst.unlink()
+                os.symlink(rel, dst)
+            else:
+                shutil.copy2(so, dst, follow_symlinks=False)
+            n += 1
+        print(f"[vcpkg] sdk/lib <- {n} link-lib file(s)")
+
+        # Dev subdirs under lib/ referenced by .pc Cflags (e.g. glib-2.0/include/glibconfig.h).
+        # The plugin/module dirs are runtime-only and stay out of the SDK.
+        runtime_only = {"pkgconfig", "gstreamer-1.0", "gio", "wpe-webkit-2.0"}
+        for sub in dist_lib.iterdir():
+            if sub.is_dir() and sub.name not in runtime_only:
+                print(f"[vcpkg] sdk/lib/{sub.name} <- {sub}")
+                shutil.copytree(sub, sdk / "lib" / sub.name, symlinks=True, dirs_exist_ok=True)
+
+        self._make_folded_lib_compat_symlinks(sdk / "lib")
+
+        self._update_current(self._current_link, self._version_dir)
+        self._write_symbolize_lib_paths()
+        print("Done.")
+
+    # Libraries that the wpe-webkit-2.0 pkg-config chain links (`-l<name>`) but which are built
+    # static and folded into the fat libWPEWebKit-2.0.so (so no standalone .so ships). A compat
+    # symlink lets the linker resolve `-l<name>` to the fat lib: for wpe its wpe_* API is
+    # exported; xkbcommon's symbols are internal to WebKit and not referenced by the consumer, so
+    # the symlink just satisfies the flag with no undefined symbols at link or runtime.
+    _FOLDED_COMPAT_LIBS = ("libwpe-1.0.so", "libxkbcommon.so")
+
+    def _make_folded_lib_compat_symlinks(self, lib_dir: Path):
+        fat_name = "libWPEWebKit-2.0.so"
+        if not (lib_dir / fat_name).exists():
+            print(f"[vcpkg][warn] {lib_dir/fat_name} missing; skipping folded-lib compat symlinks")
+            return
+        for name in self._FOLDED_COMPAT_LIBS:
+            link = lib_dir / name
+            if link.is_symlink() or link.exists():
+                continue  # a real .so shipped (e.g. built dynamic) — don't shadow it
+            os.symlink(fat_name, link)
+            print(f"[vcpkg] sdk/lib/{name} -> {fat_name} (compat)")
 
     def make_current(self, version: str):
         """Flip .webkit/current -> <version> and relink entry/libs/<abi>."""
@@ -386,6 +487,9 @@ def main():
                            help="WebKit version to fetch/copy (also used for .webkit/<version>)")
     install_p.add_argument("-c", "--cerbero", metavar="PATH",
                            help="Path to a Cerbero dist containing the tarballs")
+    install_p.add_argument("--vcpkg", metavar="PATH",
+                           help="Path to a vcpkg dist/ tree (e.g. ../webkit-openharmony-vcpkg/dist). "
+                                "Populates .webkit directly from it; mutually exclusive with --cerbero.")
     install_p.add_argument("--sdk-lib", action="append", dest="sdk_libs",
                            help="Name of a lib*.so to place as a real file in sdk/lib (can be repeated). "
                                 "If omitted, uses env WPE_OHOS_SDK_LIBS or a sensible default set.")
@@ -405,21 +509,27 @@ def main():
         "arch": args.arch,
         "version": getattr(args, "version", Bootstrap.default_version),
         "cerbero": getattr(args, "cerbero", None),
+        "vcpkg": getattr(args, "vcpkg", None),
     }
     bs = Bootstrap(ctor_args)
     # pass through CLI-provided --sdk-lib values (if any)
     bs._cli_sdk_libs = getattr(args, "sdk_libs", None)
 
-     # ---- For now, enforce cerbero required for install ----
-    if args.cmd in (None, "install") and not ctor_args.get("cerbero"):
-        print("Error: --cerbero is required for install. "
-              "Fetching from web is currently not supported.", file=sys.stderr)
-        sys.exit(1)
+    # ---- install requires exactly one source: --cerbero or --vcpkg ----
+    if args.cmd in (None, "install"):
+        if ctor_args.get("cerbero") and ctor_args.get("vcpkg"):
+            print("Error: pass only one of --cerbero / --vcpkg.", file=sys.stderr)
+            sys.exit(1)
+        if not ctor_args.get("cerbero") and not ctor_args.get("vcpkg"):
+            print("Error: install needs a source: --vcpkg PATH (vcpkg dist/) or --cerbero PATH. "
+                  "Fetching from web is not supported yet.", file=sys.stderr)
+            sys.exit(1)
 
     if args.cmd in (None, "install"):
         # When no subcommand is given, behave like 'install'
+        _src = f"vcpkg={ctor_args['vcpkg']}" if ctor_args.get("vcpkg") else f"cerbero={bool(ctor_args['cerbero'])}"
         print(f"Config: cmd=install, arch={args.arch} (ABI={ABI_MAP.get(args.arch, args.arch)}), "
-              f"version={ctor_args['version']}, cerbero={bool(ctor_args['cerbero'])}, "
+              f"version={ctor_args['version']}, {_src}, "
               f"sdk_libs={bs._cli_sdk_libs or os.environ.get('WPE_OHOS_SDK_LIBS') or 'DEFAULT'}")
         bs.install()
     elif args.cmd == "make-current":
