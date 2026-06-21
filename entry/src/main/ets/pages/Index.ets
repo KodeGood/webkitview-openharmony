@@ -9,7 +9,7 @@ interface Bookmark {
 @Component
 struct Index {
   private webkit: WebKitInterface | undefined = undefined;
-  private readonly defaultUrl: string = 'https://www.wpewebkit.org'
+  private readonly defaultUrl: string = 'https://www.youtube.com/watch?v=YE7VzlLtp-4'
   
   @State urlToLoad: string = ''
   @State showBookmarks: boolean = false
@@ -58,13 +58,14 @@ struct Index {
 
   build() {
     Flex({ direction: FlexDirection.Column }) {
-      Row() {
+      Row({ space: 4 }) {
         Button('⇦')
           .backgroundColor(Color.White)
           .fontColor(Color.Black)
           .fontWeight(FontWeight.Bolder)
-          .width('12%')
+          .width(40)
           .fontSize(12)
+          .flexShrink(0)
           .onClick(() => {
             // this.webkit?.onBackPress()
           })
@@ -73,13 +74,15 @@ struct Index {
           .fontColor(Color.Black)
           .fontWeight(FontWeight.Bolder)
           .fontSize(12)
-          .width('12%')
+          .width(40)
+          .flexShrink(0)
           .onClick(() => {
             // this.webkit?.goForward()
           })
         Button('⭐')
           .backgroundColor(Color.White).fontColor(Color.Black)
-          .fontWeight(FontWeight.Bolder).width('12%').fontSize(12)
+          .fontWeight(FontWeight.Bolder).width(40).fontSize(12)
+          .flexShrink(0)
           .onClick(() => { this.showBookmarks = true })
           .bindSheet(
             $$this.showBookmarks,
@@ -91,7 +94,7 @@ struct Index {
           )
         TextInput({ placeholder: 'URL', text: $$this.urlToLoad })
           .type(InputType.Normal)
-          .width('76%')
+          .layoutWeight(1)
           .onChange((value) => {
             // this.urlToLoad = value
           })
@@ -99,6 +102,8 @@ struct Index {
             this.webkit?.loadURL(this.urlToLoad)
           })
       }
+      .width('100%')
+      .padding({ left: 8, right: 8, top: 4, bottom: 4 })
       Column() {
           XComponent({
               id: 'webkitview',
