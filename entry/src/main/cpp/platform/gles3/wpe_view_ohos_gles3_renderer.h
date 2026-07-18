@@ -37,13 +37,16 @@ public:
     bool Initialize(OHNativeWindow* nativeWindow, int width, int height) override;
     void Cleanup() override;
 
-    void Render(EGLImage image) override;
+    int Render(EGLImage image, int acquireFenceFd) override;
 
 private:
 
     bool InitializeEGL();
     GLuint CreateProgram(const char *vertexShader, const char *fragShader);
     GLuint LoadShader(GLenum type, const char *shaderSrc);
+
+    void WaitAcquireFence(int fenceFd);
+    int CreateReleaseFence();
 
     OHNativeWindow* nativeWindow_ = nullptr;
     int width_ = 0;
@@ -52,6 +55,10 @@ private:
     PFNEGLCREATEIMAGEKHRPROC eglCreateImageKHR_;
     PFNEGLDESTROYIMAGEKHRPROC eglDestroyImageKHR_;
     PFNGLEGLIMAGETARGETTEXTURE2DOESPROC glEGLImageTargetTexture2DOES_;
+    PFNEGLCREATESYNCKHRPROC eglCreateSyncKHR_ = nullptr;
+    PFNEGLDESTROYSYNCKHRPROC eglDestroySyncKHR_ = nullptr;
+    PFNEGLWAITSYNCKHRPROC eglWaitSyncKHR_ = nullptr;
+    PFNEGLDUPNATIVEFENCEFDANDROIDPROC eglDupNativeFenceFDANDROID_ = nullptr;
 
     EGLDisplay eglDisplay_ = EGL_NO_DISPLAY;
     EGLContext eglContext_ = EGL_NO_CONTEXT;

@@ -29,6 +29,8 @@ public:
     virtual bool Initialize(OHNativeWindow* nativeWindow, int width, int height) = 0;
     virtual void Cleanup() = 0;
 
-    virtual void Render(EGLImage eglImage) = 0;
+    // Waits acquireFenceFd (a sync_file fd; -1 for none, ownership taken) on the GPU before
+    // sampling, and returns a release-fence fd signaling when sampling completes (-1 if none).
+    virtual int Render(EGLImage eglImage, int acquireFenceFd) = 0;
 };
 

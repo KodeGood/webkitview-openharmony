@@ -116,6 +116,13 @@ static void WPEDisplayOHOSDispose(GObject* object)
     G_OBJECT_CLASS(wpe_display_ohos_parent_class)->dispose(object);
 }
 
+static gboolean WPEDisplayOHOSUseExplicitSync(WPEDisplay*)
+{
+    // The Mali driver / libEGL expose EGL_ANDROID_native_fence_sync, so the compositor path
+    // carries rendering/release fences (see wpe_view_ohos + WPEBufferOHOS).
+    return TRUE;
+}
+
 static void wpe_display_ohos_class_init(WPEDisplayOHOSClass* klass)
 {
     GObjectClass* objectClass = G_OBJECT_CLASS(klass);
@@ -126,6 +133,7 @@ static void wpe_display_ohos_class_init(WPEDisplayOHOSClass* klass)
     displayClass->create_view = WPEDisplayOHOSCreateView;
     displayClass->get_egl_display = WPEDisplayOHOSGetEGLDisplay;
     displayClass->get_preferred_dma_buf_formats = WPEDisplayOHOSGetPreferredDMABufFormats;
+    displayClass->use_explicit_sync = WPEDisplayOHOSUseExplicitSync;
 }
 
 static void wpe_display_ohos_init(WPEDisplayOHOS* display)

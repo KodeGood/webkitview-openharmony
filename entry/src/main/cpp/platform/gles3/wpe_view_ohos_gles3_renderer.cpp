@@ -20,6 +20,8 @@
 
 #include "log.h"
 
+#include <unistd.h>
+
 namespace {
 static const char* s_vertexShaderSource = 
     "attribute vec2 pos;\n"
@@ -102,17 +104,24 @@ void WPEViewOHOSGLES3Renderer::Cleanup()
     }
 }
 
-void WPEViewOHOSGLES3Renderer::Render(EGLImage image)
+int WPEViewOHOSGLES3Renderer::Render(EGLImage image, int acquireFenceFd)
 {
     if (image == EGL_NO_IMAGE) {
         LOGE("Failed to bind OH_NativeBuffer to an EGLImage.");
-        return;
+        if (acquireFenceFd >= 0)
+            close(acquireFenceFd);
+        return -1;
     }
-    
+
     if (!eglMakeCurrent(eglDisplay_, eglSurface_, eglSurface_, eglContext_)) {
         LOGE("eglMakeCurrent error = %{public}d", eglGetError());
-        return;
+        if (acquireFenceFd >= 0)
+            close(acquireFenceFd);
+        return -1;
     }
+
+    // Make the GPU wait for the WebProcess's rendering fence before we sample the buffer.
+    WaitAcquireFence(acquireFenceFd);
 
     glViewport(0,0,width_,height_);
     glClearColor(0.0f, 0.0f, 1.0f, 1.0f);
@@ -148,7 +157,43 @@ void WPEViewOHOSGLES3Renderer::Render(EGLImage image)
     glDisableVertexAttribArray(attrPos);
     glDisableVertexAttribArray(attrTexture);
 
+    // Fence capturing this sample; the WebProcess waits it before reusing the buffer.
+    int releaseFenceFd = CreateReleaseFence();
+
     eglSwapBuffers(eglDisplay_, eglSurface_);
+    return releaseFenceFd;
+}
+
+void WPEViewOHOSGLES3Renderer::WaitAcquireFence(int fenceFd)
+{
+    if (fenceFd < 0)
+        return;
+    if (!eglCreateSyncKHR_ || !eglWaitSyncKHR_ || !eglDestroySyncKHR_) {
+        close(fenceFd);
+        return;
+    }
+    // eglCreateSyncKHR takes ownership of fenceFd on success.
+    EGLint attribs[] = { EGL_SYNC_NATIVE_FENCE_FD_ANDROID, fenceFd, EGL_NONE };
+    EGLSyncKHR sync = eglCreateSyncKHR_(eglDisplay_, EGL_SYNC_NATIVE_FENCE_ANDROID, attribs);
+    if (sync == EGL_NO_SYNC_KHR) {
+        close(fenceFd);
+        return;
+    }
+    eglWaitSyncKHR_(eglDisplay_, sync, 0); // server-side: the GPU waits, no CPU stall.
+    eglDestroySyncKHR_(eglDisplay_, sync);
+}
+
+int WPEViewOHOSGLES3Renderer::CreateReleaseFence()
+{
+    if (!eglCreateSyncKHR_ || !eglDupNativeFenceFDANDROID_ || !eglDestroySyncKHR_)
+        return -1;
+    EGLSyncKHR sync = eglCreateSyncKHR_(eglDisplay_, EGL_SYNC_NATIVE_FENCE_ANDROID, nullptr);
+    if (sync == EGL_NO_SYNC_KHR)
+        return -1;
+    glFlush(); // submit the sampling commands so the fence can signal.
+    int fd = eglDupNativeFenceFDANDROID_(eglDisplay_, sync);
+    eglDestroySyncKHR_(eglDisplay_, sync);
+    return fd; // EGL_NO_NATIVE_FENCE_FD_ANDROID (-1) on failure.
 }
 
 bool WPEViewOHOSGLES3Renderer::InitializeEGL()
@@ -182,6 +227,15 @@ bool WPEViewOHOSGLES3Renderer::InitializeEGL()
         LOGE("Missing glEGLImageTargetTexture2DOES");
         return false;
     }
+
+    // Explicit-sync entrypoints (EGL_ANDROID_native_fence_sync / EGL_KHR_wait_sync). Optional:
+    // without them Render() falls back to no fence wait (see WaitAcquireFence/CreateReleaseFence).
+    eglCreateSyncKHR_ = reinterpret_cast<PFNEGLCREATESYNCKHRPROC>(eglGetProcAddress("eglCreateSyncKHR"));
+    eglDestroySyncKHR_ = reinterpret_cast<PFNEGLDESTROYSYNCKHRPROC>(eglGetProcAddress("eglDestroySyncKHR"));
+    eglWaitSyncKHR_ = reinterpret_cast<PFNEGLWAITSYNCKHRPROC>(eglGetProcAddress("eglWaitSyncKHR"));
+    eglDupNativeFenceFDANDROID_ = reinterpret_cast<PFNEGLDUPNATIVEFENCEFDANDROIDPROC>(eglGetProcAddress("eglDupNativeFenceFDANDROID"));
+    if (!eglCreateSyncKHR_ || !eglDestroySyncKHR_ || !eglWaitSyncKHR_ || !eglDupNativeFenceFDANDROID_)
+        LOGE("Missing EGL fence sync entrypoints; explicit sync disabled");
 
     static const EGLint configAttributes[] = {
         EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,

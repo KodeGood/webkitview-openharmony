@@ -88,8 +88,12 @@ static void wpeViewOHOSConstructed(GObject* object)
             return G_SOURCE_CONTINUE;
         }
 
-        if (viewOHOS->renderer)
-            viewOHOS->renderer->Render(eglImage);
+        if (viewOHOS->renderer) {
+            auto* ohosBuffer = WPE_BUFFER_OHOS(viewOHOS->committedBuffer);
+            int acquireFenceFd = wpe_buffer_ohos_take_rendering_fence(ohosBuffer);
+            int releaseFenceFd = viewOHOS->renderer->Render(eglImage, acquireFenceFd);
+            wpe_buffer_ohos_set_release_fence(ohosBuffer, releaseFenceFd);
+        }
 
         if (notifyBufferRendered)
             wpe_view_buffer_rendered(view, viewOHOS->committedBuffer);
