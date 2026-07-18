@@ -22,6 +22,7 @@
 
 #include "log.h"
 
+#include "platform/wpe_input_method_context_ohos.h"
 #include "platform/wpe_toplevel_ohos.h"
 #include "platform/wpe_view_ohos.h"
 
@@ -116,6 +117,11 @@ static void WPEDisplayOHOSDispose(GObject* object)
     G_OBJECT_CLASS(wpe_display_ohos_parent_class)->dispose(object);
 }
 
+static WPEInputMethodContext* WPEDisplayOHOSCreateInputMethodContext(WPEDisplay*, WPEView* view)
+{
+    return wpe_input_method_context_ohos_new(view);
+}
+
 static gboolean WPEDisplayOHOSUseExplicitSync(WPEDisplay*)
 {
     // The Mali driver / libEGL expose EGL_ANDROID_native_fence_sync, so the compositor path
@@ -133,6 +139,7 @@ static void wpe_display_ohos_class_init(WPEDisplayOHOSClass* klass)
     displayClass->create_view = WPEDisplayOHOSCreateView;
     displayClass->get_egl_display = WPEDisplayOHOSGetEGLDisplay;
     displayClass->get_preferred_dma_buf_formats = WPEDisplayOHOSGetPreferredDMABufFormats;
+    displayClass->create_input_method_context = WPEDisplayOHOSCreateInputMethodContext;
     displayClass->use_explicit_sync = WPEDisplayOHOSUseExplicitSync;
 }
 

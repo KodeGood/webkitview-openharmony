@@ -20,6 +20,7 @@ find_library(EGL_LIB  NAMES EGL REQUIRED)
 find_library(GLES3_LIB NAMES GLESv3 REQUIRED)
 find_library(ABILITY_RUNTIME_LIB NAMES ability_runtime REQUIRED)
 find_library(UV_LIB NAMES uv REQUIRED)
+find_library(INPUTMETHOD_LIB NAMES ohinputmethod REQUIRED)
 
 find_package(PkgConfig REQUIRED)
 
@@ -32,6 +33,7 @@ add_library(webkitview SHARED
   napi_init.cpp
   platform/gles3/wpe_view_ohos_gles3_renderer.cpp
   platform/wpe_display_ohos.cpp
+  platform/wpe_input_method_context_ohos.cpp
   platform/wpe_toplevel_ohos.cpp
   platform/wpe_view_ohos.cpp
   runtime/message_pump.cpp
@@ -59,6 +61,7 @@ target_link_libraries(webkitview
     ${GLES3_LIB}
     ${ABILITY_RUNTIME_LIB}
     ${UV_LIB}
+    ${INPUTMETHOD_LIB}
 )
 
 # The Web/Network child processes are handled entirely by WebKit on OHOS: WebKit's
