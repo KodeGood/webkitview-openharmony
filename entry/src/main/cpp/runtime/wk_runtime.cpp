@@ -18,41 +18,25 @@
 
 #include "wk_runtime.h"
 
-#include <AbilityKit/native_child_process.h>
 #include <AbilityKit/ability_runtime/application_context.h>
 #include <ace/xcomponent/native_interface_xcomponent.h>
 #include <glib.h>
 #include <wpe/webkit.h>
 
-#include "arkts_runtime.h"
+#include <string>
+#include <vector>
+
 #include "environment.h"
 #include "log.h"
+#include "message_pump.h"
 
 #include "platform/wpe_display_ohos.h"
 #include "wk_web_view.h"
 
-namespace {
+// On OHOS, WebKit owns process launching (UIProcess/Launcher/ohos/ProcessLauncherOHOS.cpp):
+// this runtime registers no wpe_process_provider and only initialises the UIProcess environment.
 
-// Human-readable name for an OH_Ability_StartNativeChildProcess result code.
-const char* NativeChildProcessErrName(Ability_NativeChildProcess_ErrCode code)
-{
-    switch (code) {
-        case NCP_NO_ERROR:                       return "NCP_NO_ERROR";
-        case NCP_ERR_INVALID_PARAM:              return "NCP_ERR_INVALID_PARAM";
-        case NCP_ERR_NOT_SUPPORTED:              return "NCP_ERR_NOT_SUPPORTED";
-        case NCP_ERR_INTERNAL:                   return "NCP_ERR_INTERNAL";
-        case NCP_ERR_BUSY:                       return "NCP_ERR_BUSY";
-        case NCP_ERR_TIMEOUT:                    return "NCP_ERR_TIMEOUT";
-        case NCP_ERR_SERVICE_ERROR:              return "NCP_ERR_SERVICE_ERROR";
-        case NCP_ERR_MULTI_PROCESS_DISABLED:     return "NCP_ERR_MULTI_PROCESS_DISABLED";
-        case NCP_ERR_ALREADY_IN_CHILD:           return "NCP_ERR_ALREADY_IN_CHILD";
-        case NCP_ERR_MAX_CHILD_PROCESSES_REACHED:return "NCP_ERR_MAX_CHILD_PROCESSES_REACHED";
-        case NCP_ERR_LIB_LOADING_FAILED:         return "NCP_ERR_LIB_LOADING_FAILED";
-        case NCP_ERR_CONNECTION_FAILED:          return "NCP_ERR_CONNECTION_FAILED";
-        case NCP_ERR_CALLBACK_NOT_EXIST:         return "NCP_ERR_CALLBACK_NOT_EXIST";
-        default:                                 return "NCP_ERR_UNKNOWN";
-    }
-}
+namespace {
 
 AbilityRuntime_ErrorCode GetDir(AbilityRuntime_ErrorCode (*fn)(char*, int32_t, int32_t*), std::string& outStr)
 {
@@ -76,22 +60,6 @@ AbilityRuntime_ErrorCode GetDir(AbilityRuntime_ErrorCode (*fn)(char*, int32_t, i
         return ret; // non-resize error
     }
     return ABILITY_RUNTIME_ERROR_CODE_PARAM_INVALID;
-}
-
-// Join any number of values with ':' into a single string.
-static void JoinWithColon(const std::vector<std::string>& parts, std::string& out)
-{
-    out.clear();
-    size_t total = 0;
-    for (const auto& s : parts) total += s.size() + 1;
-    out.reserve(total);
-
-    bool first = true;
-    for (const auto& s : parts) {
-        if (!first) out.push_back(':');
-        out.append(s);
-        first = false;
-    }
 }
 
 bool GetEnvronmentParamsFromApplicationContext(std::vector<std::string>& outParams)
@@ -128,165 +96,103 @@ bool GetEnvronmentParamsFromApplicationContext(std::vector<std::string>& outPara
     return true;
 }
 
-void OnNativeChildProcessExit(int32_t pid, int32_t signal)
-{
-    LOGD("OnNativeChildProcessExit - pid: %{public}d, signal: %{public}d", pid, signal);
-}
-
-int64_t WPELaunchProcess(void* /*backend*/, wpe_process_type wpeProcessType, void* userData) noexcept
-{
-    LOGD("WPELaunchProcess - process type: %{public}d", static_cast<int>(wpeProcessType));
-    auto** options = reinterpret_cast<char**>(userData);
-    if ((options == nullptr) || (options[0] == nullptr) || (options[1] == nullptr))
-        return -1;
-
-    const long long processIdentier = std::strtoll(options[0], nullptr, 10); // NOLINT(cppcoreguidelines-avoid-magic-numbers)
-    const int socketFd = std::stoi(options[1]);
-
-    NativeChildProcess_Args args;
-    // Insert a node to the head node of the linked list.
-    args.fdList.head = (NativeChildProcess_Fd*)malloc(sizeof(NativeChildProcess_Fd));
-    args.fdList.head->fdName = strdup(options[0]);
-    args.fdList.head->fd = socketFd;
-    args.fdList.head->next = nullptr;
-    NativeChildProcess_Options process_options = {
-        .isolationMode = NCP_ISOLATION_MODE_NORMAL // Needs to be mode normal, otherwise fails to get EGLDisplay
-    };
-
-    auto pid = ArkTSRuntime::InvokeSync([=]() -> int64_t {
-        int32_t pid_local = -1;
-
-        if (wpeProcessType == WPE_PROCESS_TYPE_WEB) {
-            LOGD("Launching web process");
-            std::vector<std::string> params;
-            params.push_back("WPEWebProcess");
-            if (!GetEnvronmentParamsFromApplicationContext(params)) {
-                LOGE("Env params failed");
-                return static_cast<int64_t>(-1);
-            }
-            std::string entryParams;
-            JoinWithColon(params, entryParams);
-            NativeChildProcess_Args localArgs = args; // shallow copy ok for simple POD pointers
-            localArgs.entryParams = strdup(entryParams.c_str());
-
-            Ability_NativeChildProcess_ErrCode ret =
-                OH_Ability_StartNativeChildProcess("libwebkit_web_process.so:Main",
-                                                   localArgs, process_options, &pid_local);
-            if (ret != NCP_NO_ERROR) {
-                LOGE("OH_Ability_StartNativeChildProcess(web) failed: %{public}s (%{public}d), pid=%{public}d",
-                     NativeChildProcessErrName(ret), static_cast<int>(ret), pid_local);
-            } else {
-                LOGD("OH_Ability_StartNativeChildProcess(web) ok, pid=%{public}d", pid_local);
-            }
-
-            free(localArgs.entryParams);
-        } else if (wpeProcessType == WPE_PROCESS_TYPE_NETWORK) {
-            LOGD("Launching network process");
-            std::vector<std::string> params;
-            params.push_back("WPENetworkProcess");
-            if (!GetEnvronmentParamsFromApplicationContext(params)) {
-                LOGE("Env params failed");
-                return static_cast<int64_t>(-1);
-            }
-            std::string entryParams;
-            JoinWithColon(params, entryParams);
-            NativeChildProcess_Args localArgs = args;
-            localArgs.entryParams = strdup(entryParams.c_str());
-
-            Ability_NativeChildProcess_ErrCode ret =
-                OH_Ability_StartNativeChildProcess("libwebkit_network_process.so:Main",
-                                                   localArgs, process_options, &pid_local);
-            if (ret != NCP_NO_ERROR) {
-                LOGE("OH_Ability_StartNativeChildProcess(network) failed: %{public}s (%{public}d), pid=%{public}d",
-                     NativeChildProcessErrName(ret), static_cast<int>(ret), pid_local);
-            } else {
-                LOGD("OH_Ability_StartNativeChildProcess(network) ok, pid=%{public}d", pid_local);
-            }
-
-            free(localArgs.entryParams);
-        } else {
-            LOGE("Unknown process type: %{public}d", static_cast<int>(wpeProcessType));
-        }
-
-        LOGD("PID (ArkTS thread): %{public}d", pid_local);
-        return static_cast<int64_t>(pid_local);
-    });
-
-    // Clean up fd list we allocated before the hop
-    if (args.fdList.head) {
-        free((void*)args.fdList.head->fdName);
-        free(args.fdList.head);
-    }
-
-    LOGD("PID (caller thread): %{public}ld", pid);
-    return pid;
-/*
-    int32_t pid = -1;
-    if (wpeProcessType == WPE_PROCESS_TYPE_WEB) {
-        LOGD("Launching web process");
-
-        std::vector<std::string> params;
-        params.push_back("WPEWebProcess");
-        GetEnvronmentParamsFromApplicationContext(params);
-
-        std::string entryParams;
-        JoinWithColon(params, entryParams);
-        args.entryParams = strdup(entryParams.c_str());
-
-        Ability_NativeChildProcess_ErrCode ret = OH_Ability_StartNativeChildProcess(
-          "libwpe_web_process.so:Main", args, process_options, &pid);
-    } else if (wpeProcessType == WPE_PROCESS_TYPE_NETWORK) {
-        LOGD("Launching network process");
-
-        std::vector<std::string> params;
-        params.push_back("WPENetworkProcess");
-        GetEnvronmentParamsFromApplicationContext(params);
-
-        std::string entryParams;
-        JoinWithColon(params, entryParams);
-        args.entryParams = strdup(entryParams.c_str());
-
-        Ability_NativeChildProcess_ErrCode ret = OH_Ability_StartNativeChildProcess(
-          "libwpe_network_process.so:Main", args, process_options, &pid);
-    } else {
-        LOGE("Cannot launch process type: %{public}d", static_cast<int>(wpeProcessType));
-    }
-    LOGD("PID: %{public}d", pid);
-    return pid;
-*/
-}
-
-void WPETerminateProcess(void* /*backend*/, int64_t pid)
-{
-    LOGD("WPETerminateProcess - pid: %{public}ld", pid);
-}
-
 } // namespace
 
-WKRuntime::WKRuntime()
-{
-    std::vector<std::string> params;
-    params.push_back("WPEUIProcess");
-    GetEnvronmentParamsFromApplicationContext(params);
-    Environment::Initialize(params);
-OH_Ability_RegisterNativeChildProcessExitCallback(OnNativeChildProcessExit);
-    uiProcessThread_ = std::thread(&WKRuntime::UIProcessThread, this);
-}
+WKRuntime::WKRuntime() = default;
 
 WKRuntime::~WKRuntime()
 {
     LOGD("WKRuntime::~WKRuntime");
-    if (uiProcessThread_.joinable()) {
-        if (mainLoop_ != nullptr) {
-            g_main_loop_quit(*mainLoop_);
-        }
-        uiProcessThread_.join();
-    }
 
     for (auto& pair : wkWebViewMap_) {
         delete pair.second;
     }
     wkWebViewMap_.clear();
+
+    messagePump_ = nullptr;
+    uiReady_.store(false, std::memory_order_release);
+}
+
+void WKRuntime::Initialize(uv_loop_t* loop)
+{
+    GetInstance().DoInitialize(loop);
+}
+
+void WKRuntime::DoInitialize(uv_loop_t* loop)
+{
+    // Guard on "attempted", not on uiReady_: a second call (e.g. the napi
+    // module Init running for another env) must not construct a second
+    // MessagePump over the same default GMainContext.
+    if (initialized_)
+        return;
+    initialized_ = true;
+
+    std::vector<std::string> params;
+    params.push_back("WPEUIProcess");
+    if (GetEnvronmentParamsFromApplicationContext(params)) {
+        Environment::Initialize(params);
+    } else {
+        // Environment::Initialize indexes params[1..4]; without the dirs it
+        // would read out of bounds. WebKit still starts, just without the
+        // sandbox-dir environment (fontconfig/GStreamer paths etc.).
+        LOGE("WKRuntime::DoInitialize - ApplicationContext dirs unavailable; environment not initialised");
+    }
+
+    // Drive WebKit's GLib run loop from this (the ArkTS) thread's libuv loop.
+    // WebKit runs on the ArkTS thread, which owns the default GMainContext the
+    // pump services.
+    messagePump_ = std::make_unique<MessagePump>(loop);
+
+    wpeDisplay_ = wpe_display_ohos_new();
+
+    GError* error = nullptr;
+    if (!wpe_display_connect(wpeDisplay_, &error)) {
+        LOGE("WKRuntime::DoInitialize - failed to connect display: %{public}s",
+            error ? error->message : "unknown error");
+        if (error != nullptr)
+            g_error_free(error);
+        FailInitialize();
+        return;
+    }
+
+    // Load-bearing: this is the first WTF-touching WebKit call, made on the
+    // ArkTS thread with no thread-default GMainContext pushed. It triggers
+    // webkitInitialize() -> WTF::initializeMainThread(), claiming this thread
+    // as WebKit's main thread and binding RunLoop::main to
+    // g_main_context_default() — the context the MessagePump services. If any
+    // WTF-touching call ever precedes this on another thread, RunLoop::main
+    // binds a private context nobody pumps and WebKit silently hangs.
+    // Web views created without an explicit web-context use the default one
+    // (get_default is transfer-none, so nothing to unref here).
+    webkit_web_context_get_default();
+
+    uiReady_.store(true, std::memory_order_release);
+    FlushPendingInvokesOnUIReady();
+    FlushPendingInitsOnUIReady();
+}
+
+void WKRuntime::FailInitialize()
+{
+    initFailed_.store(true, std::memory_order_release);
+
+    // Nothing will ever flush the pending queues; run the destroy callbacks so
+    // queued payloads are not leaked, and drop queued view inits.
+    std::vector<PendingInvoke> invokes;
+    {
+        std::lock_guard<std::mutex> lock(pendingInvokeMutex_);
+        invokes.swap(pendingInvokes_);
+    }
+    for (const auto& invoke : invokes) {
+        if (invoke.destroy != nullptr)
+            invoke.destroy(invoke.callbackData);
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(pendingInitMutex_);
+        pendingInitialization_.clear();
+    }
+
+    messagePump_ = nullptr;
 }
 
 bool WKRuntime::Export(napi_env env, napi_value exports)
@@ -307,18 +213,8 @@ bool WKRuntime::Export(napi_env env, napi_value exports)
         return false;
     }
 
-    static const wpe_process_provider_interface s_processProviderInterface = {
-        .create = nullptr,
-        .destroy = nullptr,
-        .launch = WPELaunchProcess,
-        .terminate = WPETerminateProcess,
-        ._wpe_reserved1 = nullptr,
-        ._wpe_reserved2 = nullptr,
-        ._wpe_reserved3 = nullptr,
-        ._wpe_reserved4 = nullptr,
-        ._wpe_reserved5 = nullptr
-    };
-    wpe_process_provider_register_interface(&s_processProviderInterface);
+    // No wpe_process_provider is registered: on OHOS, WebKit's own ProcessLauncherOHOS spawns
+    // the Web/Network processes via AbilityKit and forwards their sandbox environment.
 
     auto id = WKRuntime::GetXComponentId(nativeXComponent);
     WKRuntime::GetInstance().RegisterNativeXComponent(id, nativeXComponent);
@@ -386,6 +282,11 @@ WKWebView* WKRuntime::GetWebViewInternal(const std::string& id)
 
 void WKRuntime::DoRequestWebViewInit(const std::string& id)
 {
+    if (initFailed_.load(std::memory_order_acquire)) {
+        LOGE("WKRuntime::DoRequestWebViewInit - runtime initialization failed; ignoring '%{public}s'", id.c_str());
+        return;
+    }
+
     if (uiReady_.load(std::memory_order_acquire)) {
         auto* data = new std::string(id);
         DoInvoke(
@@ -423,42 +324,19 @@ void WKRuntime::FlushPendingInitsOnUIReady()
     }
 }
 
-void WKRuntime::UIProcessThread()
+void WKRuntime::DoInvoke(void (* callback)(void*), void* callbackData, void (* destroy)(void*))
 {
-    mainContext_ = std::make_unique<GMainContext*>(g_main_context_new());
-    mainLoop_ = std::make_unique<GMainLoop*>(g_main_loop_new(*mainContext_, FALSE));
-    g_main_context_push_thread_default(*mainContext_);
-
-    wpeDisplay_ = wpe_display_ohos_new();
-
-    GError* error;
-    if (!wpe_display_connect(wpeDisplay_, &error)) {
-        LOGE("WKRuntime::UIProcessThread - failed to connect display");
-        g_error_free(error);
+    // The message pump (and the GLib context it services) is created in
+    // DoInitialize. Until it is ready, queue invokes instead of dispatching to
+    // a null pump (which otherwise crashes when ACE fires e.g. OnSurfaceCreated
+    // before init).
+    if (initFailed_.load(std::memory_order_acquire)) {
+        // Initialization failed permanently; don't queue into a void.
+        if (destroy != nullptr)
+            destroy(callbackData);
         return;
     }
 
-    webkit_web_context_new();
-
-    uiReady_.store(true, std::memory_order_release);
-    FlushPendingInvokesOnUIReady();
-    FlushPendingInitsOnUIReady();
-
-    g_main_loop_run(*mainLoop_);
-
-    g_main_context_pop_thread_default(*mainContext_);
-    g_main_loop_unref(*mainLoop_);
-    g_main_context_unref(*mainContext_);
-    mainLoop_ = nullptr;
-    mainContext_ = nullptr;
-    uiReady_.store(false, std::memory_order_release);
-}
-
-void WKRuntime::DoInvoke(void (* callback)(void*), void* callbackData, void (* destroy)(void*))
-{
-    // The UI process thread creates mainContext_ asynchronously. Until it is
-    // ready, queue invokes instead of dereferencing a null mainContext_ (which
-    // otherwise crashes when ACE fires e.g. OnSurfaceCreated before init).
     if (!uiReady_.load(std::memory_order_acquire)) {
         std::lock_guard<std::mutex> lock(pendingInvokeMutex_);
         // Re-check under the lock: FlushPendingInvokesOnUIReady() runs after
@@ -487,24 +365,7 @@ void WKRuntime::FlushPendingInvokesOnUIReady()
 
 void WKRuntime::DispatchInvoke(void (* callback)(void*), void* callbackData, void (* destroy)(void*))
 {
-    struct GenericCallback {
-        void (* callback)(void*);
-        void* callbackData;
-        void (* destroy)(void*);
-    };
-
-    auto* data = new GenericCallback{callback, callbackData, destroy};
-    g_main_context_invoke_full(*mainContext_, G_PRIORITY_DEFAULT, [](void* data) -> gboolean {
-        auto* genericData = static_cast<GenericCallback*>(data);
-        if (genericData->callback != nullptr) {
-            genericData->callback(genericData->callbackData);
-        }
-        return G_SOURCE_REMOVE;
-    }, data, +[](void* data) {
-        auto* genericData = static_cast<GenericCallback*>(data);
-        if (genericData->destroy != nullptr) {
-            genericData->destroy(genericData->callbackData);
-        }
-        delete genericData;
-    });
+    // Post to the GLib context via the pump; the context wakeup fd is observed
+    // by libuv, so the callback runs on the ArkTS/GLib thread.
+    messagePump_->invoke(callback, destroy, callbackData);
 }

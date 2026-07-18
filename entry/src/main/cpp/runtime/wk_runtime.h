@@ -19,19 +19,27 @@
 #pragma once
 
 #include <atomic>
+#include <memory>
 #include <mutex>
-#include <thread>
 #include <unordered_map>
+#include <vector>
 
 #include <ace/xcomponent/native_interface_xcomponent.h>
 #include <napi/native_api.h>
+#include <uv.h>
 
 #include <wpe/webkit.h>
 
+class MessagePump;
 class WKWebView;
 
 class WKRuntime final {
 public:
+    // Sets up the UIProcess environment and drives WebKit's GLib run loop from
+    // the given libuv loop (the ArkTS main-thread event loop). Must be called
+    // once, on the thread that owns `loop`.
+    static void Initialize(uv_loop_t* loop);
+
     static bool Export(napi_env env, napi_value exports);
 
     static std::string GetXComponentId(OH_NativeXComponent *component);
@@ -59,10 +67,10 @@ private:
     WPEDisplay* GetWPEDisplayInternal() const;
     WKWebView* GetWebViewInternal(const std::string& id);
 
+    void DoInitialize(uv_loop_t* loop);
+
     void DoRequestWebViewInit(const std::string& id);
     void FlushPendingInitsOnUIReady();
-
-    void UIProcessThread();
 
     void DoInvoke(void (* callback)(void*), void* callbackData, void (* destroy)(void*));
     void DispatchInvoke(void (* callback)(void*), void* callbackData, void (* destroy)(void*));
@@ -74,10 +82,14 @@ private:
         void (* destroy)(void*);
     };
 
-    std::thread uiProcessThread_;
-    std::unique_ptr<GMainContext*> mainContext_ = nullptr;
-    std::unique_ptr<GMainLoop*> mainLoop_ = nullptr;
+    void FailInitialize();
+
+    std::unique_ptr<MessagePump> messagePump_;
+    // Set when DoInitialize first runs (attempted), regardless of outcome.
+    // Only touched on the ArkTS thread.
+    bool initialized_ = false;
     std::atomic<bool> uiReady_{false};
+    std::atomic<bool> initFailed_{false};
 
     std::mutex pendingInitMutex_;
     std::vector<std::string> pendingInitialization_;

@@ -57,6 +57,9 @@ void Initialize(const std::vector<std::string>& params)
     std::string gstRegistry = params[1] + "/gstreamer-1.0-registry.bin";
     setenv("GST_REGISTRY", gstRegistry.c_str(), 1);
     setenv("GST_REGISTRY_FORK", "no", 1);
+
+    // Uncomment to enable WebKit RELEASE_LOG channels (logLevelString() reads WEBKIT_DEBUG):
+    // setenv("WEBKIT_DEBUG", "Process,IPC", 1);
 }
 
 } // namespace Environment

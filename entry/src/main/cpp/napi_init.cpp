@@ -17,9 +17,9 @@
  */
 
 #include <epoxy/egl.h>
+#include <uv.h>
 
 #include "common/log.h"
-#include "runtime/arkts_runtime.h"
 #include "runtime/wk_runtime.h"
 #include "runtime/wk_web_view.h"
 
@@ -70,7 +70,18 @@ static napi_value Init(napi_env env, napi_value exports)
     };
     napi_define_properties(env, exports, sizeof(desc) / sizeof(desc[0]), desc);
 
-    bool ret = ArkTSRuntime::Init(env);
+    // Drive WebKit's GLib run loop from this (the ArkTS) thread's libuv loop.
+    // Must run on the app main env: importing the module from a Worker first
+    // would bind WebKit's main thread to that worker thread.
+    bool ret = true;
+    uv_loop_t* loop = nullptr;
+    if (napi_get_uv_event_loop(env, &loop) != napi_ok || loop == nullptr) {
+        LOGE("Init: failed to get libuv event loop");
+        ret = false;
+    } else {
+        WKRuntime::Initialize(loop);
+    }
+
     ret &= WKRuntime::Export(env, exports);
     ret &= WKWebView::Export(env, exports);
     if (!ret) {

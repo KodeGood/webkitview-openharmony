@@ -34,7 +34,7 @@ add_library(webkitview SHARED
   platform/wpe_display_ohos.cpp
   platform/wpe_toplevel_ohos.cpp
   platform/wpe_view_ohos.cpp
-  runtime/arkts_runtime.cpp
+  runtime/message_pump.cpp
   runtime/wk_runtime.cpp
   runtime/wk_web_view.cpp
 )
@@ -61,47 +61,12 @@ target_link_libraries(webkitview
     ${UV_LIB}
 )
 
-# ---- webkit_web_process ----
-add_library(webkit_web_process SHARED
-  common/environment.cpp
-  web_process/web_process.cpp
-)
-
-target_include_directories(webkit_web_process PRIVATE
-  ${WPEVIEW_ROOT_PATH}
-  ${WPEVIEW_ROOT_PATH}/common
-)
-
-target_link_libraries(webkit_web_process
-  PRIVATE
-    PkgConfig::WEBKIT
-    PkgConfig::GLIB
-    ${HILOG_LIB}
-    ${CHILDPROC_LIB}
-)
-
-# ---- webkit_network_process ----
-add_library(webkit_network_process SHARED
-  common/environment.cpp
-  network_process/network_process.cpp
-)
-
-target_include_directories(webkit_network_process PRIVATE
-  ${WPEVIEW_ROOT_PATH}
-  ${WPEVIEW_ROOT_PATH}/common
-)
-
-target_link_libraries(webkit_network_process
-  PRIVATE
-    PkgConfig::WEBKIT
-    PkgConfig::GLIB
-    ${HILOG_LIB}
-    ${CHILDPROC_LIB}
-)
+# The Web/Network child processes are handled entirely by WebKit on OHOS: WebKit's
+# ProcessLauncherOHOS spawns them and they load the same libWPEWebKit-2.0.so (which exports
+# NativeChildProcess_OnConnect/_MainProc). There is no separate child .so and nothing extra
+# for the embedder to build or package.
 
 target_compile_features(webkitview PRIVATE cxx_std_17)
-target_compile_features(webkit_network_process PRIVATE cxx_std_17)
-target_compile_features(webkit_web_process PRIVATE cxx_std_17)
 
 file(GLOB RUNTIME_LIBS "${CMAKE_SOURCE_DIR}/../../../../.webkit/current/${OHOS_ARCH}/runtime/lib/*.so")
 file(COPY ${RUNTIME_LIBS} DESTINATION "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/")
