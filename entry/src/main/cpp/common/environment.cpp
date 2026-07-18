@@ -58,6 +58,10 @@ void Initialize(const std::vector<std::string>& params)
     setenv("GST_REGISTRY", gstRegistry.c_str(), 1);
     setenv("GST_REGISTRY_FORK", "no", 1);
 
+    // Disabled on OHOS: the monitor's /proc/meminfo parser spins on OHOS's non-standard format.
+    // See OHOS_TODO.md (MemoryPressureMonitor) for the planned fix.
+    setenv("WEBKIT_DISABLE_MEMORY_PRESSURE_MONITOR", "1", 1);
+
     // Uncomment to enable WebKit RELEASE_LOG channels (logLevelString() reads WEBKIT_DEBUG):
     // setenv("WEBKIT_DEBUG", "Process,IPC", 1);
 }
