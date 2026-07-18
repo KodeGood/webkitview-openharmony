@@ -28,6 +28,9 @@ say "Stopping previous: ${BUNDLE_NAME}"
 
 sleep 1
 
+# ---------- Set screen off time to 1h ----------
+"${HDC_CMD[@]}" shell power-shell timeout -o 3600000
+
 # ---------- Launch the app ----------
 say "Launching: ${BUNDLE_NAME}/${ABILITY_NAME}"
 set +e
