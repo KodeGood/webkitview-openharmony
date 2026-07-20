@@ -101,6 +101,9 @@ P12="${SDK_LIB}/OpenHarmony.p12"
 PROFILE_PEM="$SDK_LIB/OpenHarmonyProfile${PROFILE_KIND^}.pem"
 PROFILE_TMPL="${SDK_LIB}/Unsgned${PROFILE_KIND^}ProfileTemplate.json"  # sometimes "Unsigned"
 [[ -f "$PROFILE_TMPL" ]] || PROFILE_TMPL="${SDK_LIB}/Unsigned${PROFILE_KIND^}ProfileTemplate.json"
+# SDK ships the release template as "UnsgnedReleasedProfileTemplate.json" (note the 'd').
+[[ -f "$PROFILE_TMPL" ]] || PROFILE_TMPL="${SDK_LIB}/Unsgned${PROFILE_KIND^}dProfileTemplate.json"
+[[ -f "$PROFILE_TMPL" ]] || PROFILE_TMPL="${SDK_LIB}/Unsigned${PROFILE_KIND^}dProfileTemplate.json"
 HAP_JAR="${SDK_LIB}/hap-sign-tool.jar"
 for f in "$P12" "$PROFILE_PEM" "$PROFILE_TMPL" "$HAP_JAR"; do
   [[ -f "$f" ]] || die "Missing: $f"

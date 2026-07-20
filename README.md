@@ -119,6 +119,20 @@ python3 tools/bootstrap.py -a arm64 install --vcpkg <path-to-your-webkit-openhar
 ./launch-webkitview
 ```
 
+### Troubleshooting: `code:9568404 delivery sign profile failed` (WIP Volla X23 + Oniro)
+
+On the work-in-progress Volla X23 + Oniro image, `install-webkitview` fails at the
+install step with `code:9568404 error: delivery sign profile failed.` This board's
+Halium kernel has no `/dev/code_sign` node (the OHOS `code_sign` driver isn't ported),
+but the userspace still expects it for **debug** profiles. Sign with a **release**
+profile, which skips that path:
+
+```bash
+PROFILE_KIND=release ./tools/gen-signing-config.sh com.kodegood.webkitview \
+  .autosign-release "$OHOS_SDK_TOOLCHAINS"
+AUTOSIGN_DIR=.autosign-release ./install-webkitview
+```
+
 ## Known Issues
 
 - First launch may take longer than expected — please be patient.  
