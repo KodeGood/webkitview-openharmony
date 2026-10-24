@@ -292,10 +292,12 @@ class Bootstrap:
 
     def _write_symbolize_lib_paths(self):
         """
-        Write <project>/.symbolize-lib-paths with two lines:
-          1) <cerbero_root>/build/dist/ohos_<arch>/lib              (if --cerbero provided)
+        Write <project>/.symbolize-lib-paths, one directory per line, searched in order:
+          1) <cerbero_root>/build/dist/ohos_<arch>/lib              (if --cerbero provided), or
+             <dist>/../lib and <dist>/../vcpkg_installed/arm64-ohos/lib, whichever exist,
+             falling back to <dist>/lib                              (if --vcpkg provided)
           2) <project>/entry/build/default/intermediates/libs/default/<abi>/
-        Lines end with a trailing slash. If cerbero root is not provided, only line 2 is written.
+        Lines end with a trailing slash. If no source is provided, only line 2 is written.
         """
         lines = []
 
@@ -308,15 +310,18 @@ class Bootstrap:
                 line += "/"
             lines.append(line)
         elif self._vcpkg_dist_path:
-            # dist/lib is stripped by package.py; symbolization needs the UNSTRIPPED libs from the
-            # vcpkg install tree (same build-id). The install tree is a sibling of dist/.
+            # dist/lib is stripped by package.py; symbolization needs the UNSTRIPPED libs (same
+            # build-id), which live in siblings of dist/: <build>/lib holds WebKit's own libs in
+            # an in-tree WebKit build, vcpkg_installed holds the dependencies (and WebKit too when
+            # it was built as a vcpkg port).
             dist = Path(self._vcpkg_dist_path)
-            unstripped = dist.parent / "vcpkg_installed" / "arm64-ohos" / "lib"
-            chosen = unstripped if unstripped.is_dir() else (dist / "lib")
-            line = chosen.as_posix()
-            if not line.endswith("/"):
-                line += "/"
-            lines.append(line)
+            unstripped = [d for d in (dist.parent / "lib", dist.parent / "vcpkg_installed" / "arm64-ohos" / "lib")
+                          if d.is_dir()]
+            for chosen in unstripped or [dist / "lib"]:
+                line = chosen.as_posix()
+                if not line.endswith("/"):
+                    line += "/"
+                lines.append(line)
         else:
             print("[symbolize][warn] no source provided; writing only the project intermediates path.")
 
