@@ -24,7 +24,7 @@ cmake_minimum_required(VERSION 3.5.0)
 #
 # You can override via:
 #   -DWEBKIT_BASE_DIR=/abs/path/to/.webkit
-#   -DWEBKIT_VERSION=current     # or 2.50.0
+#   -DWEBKIT_VERSION=current     # or 2.52.6
 #   -DWEBKIT_ABI=arm64-v8a       # default from OHOS toolchain
 # =============================================================================
 
@@ -50,7 +50,7 @@ include("${_OHOS_TOOLCHAIN}")  # sets CMAKE_SYSROOT, compilers, OHOS_ARCH, etc.
 # --- Inputs -------------------------------------------------------------------
 # Version label (folder under .webkit)
 set(WEBKIT_VERSION "${WEBKIT_VERSION}" CACHE STRING
-    "WebKit version under .webkit/<version>/<abi> (e.g., 2.50.0 or current)")
+    "WebKit version under .webkit/<version>/<abi> (e.g., 2.52.6 or current)")
 if(NOT WEBKIT_VERSION)
   set(WEBKIT_VERSION "current")
 endif()
