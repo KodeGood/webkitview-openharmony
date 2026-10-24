@@ -71,7 +71,7 @@ SDK_LINKING_LIBS_DEFAULT = {
 
 class Bootstrap:
     default_arch = "arm64"      # input name (mapped via ABI_MAP)
-    default_version = "2.52.6"
+    default_version = "2.53.3"
 
     # Source of packages (adjust if your hosting path differs)
     _packages_url_template = "" # TODO

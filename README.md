@@ -92,7 +92,7 @@ provides the dependencies (bootstrapped automatically at a pinned baseline), and
 regular CMake/Ninja build.
 
 ```bash
-git clone --depth 1 -b wpewebkit-2.52.6-ohos https://github.com/KodeGood/WebKit.git
+git clone --depth 1 -b wpewebkit-2.53.3-ohos https://github.com/KodeGood/WebKit.git
 cd WebKit
 export OHOS_SDK_ROOT=${OHOS_BASE_SDK_HOME}/23   # dir with native/build/cmake/ohos.toolchain.cmake
 Tools/Scripts/build-webkit-ohos --release
@@ -101,13 +101,14 @@ Tools/Scripts/build-webkit-ohos --release
 The first build also builds the dependencies and takes a while; later builds reuse vcpkg's binary
 cache, and `ninja -C WebKitBuild/OHOS/Release` rebuilds WebKit incrementally. The packaged result
 lands in `WebKitBuild/OHOS/Release/dist`. See
-[`WebKitLibraries/ohos/README.md`](https://github.com/KodeGood/WebKit/blob/wpewebkit-2.52.6-ohos/WebKitLibraries/ohos/README.md)
+[`WebKitLibraries/ohos/README.md`](https://github.com/KodeGood/WebKit/blob/wpewebkit-2.53.3-ohos/WebKitLibraries/ohos/README.md)
 for host prerequisites and build options.
 
 Branches:
 
-- [`wpewebkit-2.52.6-ohos`](https://github.com/KodeGood/WebKit/tree/wpewebkit-2.52.6-ohos) — WPE WebKit 2.52.6 with the OpenHarmony patches (**default**).
-- [`wpewebkit-2.51.93-ohos`](https://github.com/KodeGood/WebKit/tree/wpewebkit-2.51.93-ohos) — the previous WPE WebKit 2.51.93 based port.
+- [`wpewebkit-2.53.3-ohos`](https://github.com/KodeGood/WebKit/tree/wpewebkit-2.53.3-ohos) — WPE WebKit 2.53.3 with the OpenHarmony patches (**default**).
+- [`wpewebkit-2.52.6-ohos`](https://github.com/KodeGood/WebKit/tree/wpewebkit-2.52.6-ohos) — the previous WPE WebKit 2.52.6 based port.
+- [`wpewebkit-2.51.93-ohos`](https://github.com/KodeGood/WebKit/tree/wpewebkit-2.51.93-ohos) — the older WPE WebKit 2.51.93 based port.
 - [`wpewebkit-2.50.0-ohos`](https://github.com/KodeGood/WebKit/tree/wpewebkit-2.50.0-ohos) — the older WPE WebKit 2.50.0 based port.
 
 WebKitView builds against any of these branches.
