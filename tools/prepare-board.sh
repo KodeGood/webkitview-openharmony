@@ -20,7 +20,6 @@ need hdc
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(realpath "$SCRIPT_DIR/..")"
 
-NATIVE_BUFFER_LIB="$PROJECT_ROOT/prebuilts/libnative_buffer_socket.z.so"
 MEMMGR_CONFIG="$PROJECT_ROOT/prebuilts/memmgr_config.xml"
 
 echo "==> Target app identifier: ${APP_ID}"
@@ -77,9 +76,9 @@ else
 fi
 
 # --- Push prebuilts ---
-echo "==> Sending $NATIVE_BUFFER_LIB -> /system/lib64/ndk/libnative_buffer_socket.z.so"
-hdc file send "$NATIVE_BUFFER_LIB" "/system/lib64/ndk/libnative_buffer_socket.z.so"
-hdc shell "chmod 0644 /system/lib64/ndk/libnative_buffer_socket.z.so"
+# echo "==> Sending $NATIVE_BUFFER_LIB -> /system/lib64/ndk/libnative_buffer_socket.z.so"
+# hdc file send "$NATIVE_BUFFER_LIB" "/system/lib64/ndk/libnative_buffer_socket.z.so"
+# hdc shell "chmod 0644 /system/lib64/ndk/libnative_buffer_socket.z.so"
 
 echo "==> Sending $MEMMGR_CONFIG -> /system/etc/memmgr/memmgr_config.xml"
 hdc file send "$MEMMGR_CONFIG" "/system/etc/memmgr/memmgr_config.xml"
