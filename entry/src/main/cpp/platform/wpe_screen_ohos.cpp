@@ -19,18 +19,39 @@
 #include "platform/wpe_screen_ohos.h"
 
 #include "log.h"
+#include "platform/wpe_screen_sync_observer_ohos.h"
 
 #include <cmath>
 #include <window_manager/oh_display_manager.h>
 
 struct _WPEScreenOHOS {
     WPEScreen parent;
+    WPEScreenSyncObserver* syncObserver;
 };
 
 G_DEFINE_FINAL_TYPE(WPEScreenOHOS, wpe_screen_ohos, WPE_TYPE_SCREEN)
 
-static void wpe_screen_ohos_class_init(WPEScreenOHOSClass*)
+static void wpeScreenOHOSDispose(GObject* object)
 {
+    g_clear_object(&WPE_SCREEN_OHOS(object)->syncObserver);
+    G_OBJECT_CLASS(wpe_screen_ohos_parent_class)->dispose(object);
+}
+
+static WPEScreenSyncObserver* wpeScreenOHOSGetSyncObserver(WPEScreen* screen)
+{
+    auto* screenOHOS = WPE_SCREEN_OHOS(screen);
+    if (!screenOHOS->syncObserver)
+        screenOHOS->syncObserver = wpe_screen_sync_observer_ohos_new();
+    return screenOHOS->syncObserver;
+}
+
+static void wpe_screen_ohos_class_init(WPEScreenOHOSClass* klass)
+{
+    GObjectClass* objectClass = G_OBJECT_CLASS(klass);
+    objectClass->dispose = wpeScreenOHOSDispose;
+
+    WPEScreenClass* screenClass = WPE_SCREEN_CLASS(klass);
+    screenClass->get_sync_observer = wpeScreenOHOSGetSyncObserver;
 }
 
 static void wpe_screen_ohos_init(WPEScreenOHOS* screen)

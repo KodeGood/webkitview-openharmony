@@ -17,6 +17,7 @@ find_library(CHILDPROC_LIB NAMES child_process REQUIRED)
 find_library(NATIVE_BUFFER_LIB NAMES native_buffer REQUIRED)
 find_library(NATIVE_WINDOW_LIB NAMES native_window REQUIRED)
 find_library(NATIVE_DISPLAY_MANAGER_LIB NAMES native_display_manager REQUIRED)
+find_library(NATIVE_VSYNC_LIB NAMES native_vsync REQUIRED)
 find_library(EGL_LIB  NAMES EGL REQUIRED)
 find_library(GLES3_LIB NAMES GLESv3 REQUIRED)
 find_library(ABILITY_RUNTIME_LIB NAMES ability_runtime REQUIRED)
@@ -36,6 +37,7 @@ add_library(webkitview SHARED
   platform/wpe_display_ohos.cpp
   platform/wpe_input_method_context_ohos.cpp
   platform/wpe_screen_ohos.cpp
+  platform/wpe_screen_sync_observer_ohos.cpp
   platform/wpe_toplevel_ohos.cpp
   platform/wpe_view_ohos.cpp
   runtime/message_pump.cpp
@@ -60,6 +62,7 @@ target_link_libraries(webkitview
     ${NATIVE_BUFFER_LIB}
     ${NATIVE_WINDOW_LIB}
     ${NATIVE_DISPLAY_MANAGER_LIB}
+    ${NATIVE_VSYNC_LIB}
     ${EGL_LIB}
     ${GLES3_LIB}
     ${ABILITY_RUNTIME_LIB}
