@@ -19,11 +19,13 @@ The project can be built using the public OpenHarmony 6.1 SDK (API level 23).
 
 - Ubuntu 24.04 or later (or compatible Linux distribution)
 - OpenHarmony 6.1 SDK (API level 23)
-- HiHope HH-SCDAYU200 development board (or compatible device)
+- HiHope HH-SCDAYU200 development board (or compatible device, e.g. the Volla X23 with the
+  work-in-progress Oniro image, see Troubleshooting)
 - OpenHarmony 6.1 arm64 image flashed on the device
 - `python3`
 - `npm`
 - `nodejs`
+- a JDK (`java`, `keytool`), for signing
 
 **Note:** Root access to the development board is required.
 
@@ -60,6 +62,10 @@ To apply all these modifications, connect the device to your PC and run
 ```bash
 tools/prepare-board.sh
 ```
+
+The script whitelists the app-identifier of WebKitView's signing profile (`12341234`) and reboots
+the device. It adds to the identifiers already whitelisted, so other apps stay allowed; pass
+their identifiers to whitelist more apps at once, e.g. `tools/prepare-board.sh 12341234 12341235`.
 
 ## Setting Up Your Environment
 
@@ -139,6 +145,15 @@ PROFILE_KIND=release ./tools/gen-signing-config.sh com.kodegood.webkitview \
   .autosign-release "$OHOS_SDK_TOOLCHAINS"
 AUTOSIGN_DIR=.autosign-release ./install-webkitview
 ```
+
+The generator writes the UDIDs of the devices connected at that moment into the profile, so
+connect every device the profile should cover before generating it.
+
+If the app installs but web content stays black, check that it was installed with a signed
+profile: `hdc shell "bm dump -n com.kodegood.webkitview" | grep appIdentifier` must print
+`12341234`. With an empty `appIdentifier` the app doesn't match the allow-list that
+`tools/prepare-board.sh` installs, the system refuses to start WebKit's child processes
+(`not support child process` in hilog), and no web process runs.
 
 ## Known Issues
 
