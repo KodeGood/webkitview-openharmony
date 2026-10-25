@@ -22,6 +22,7 @@
 #include "wk_runtime.h"
 
 #include "platform/gles3/wpe_view_ohos_gles3_renderer.h"
+#include "platform/wpe_toplevel_ohos.h"
 #include "platform/wpe_view_ohos.h"
 
 namespace {
@@ -368,7 +369,7 @@ void WKWebView::InitializeRenderer()
     }
 
     wpe_view_ohos_set_renderer(wpeView_, wpeViewRenderer_);
-    wpe_view_ohos_resize(wpeView_, width_, height_);
+    wpe_toplevel_ohos_set_physical_size(WPE_TOPLEVEL_OHOS(wpe_view_get_toplevel(WPE_VIEW(wpeView_))), width_, height_);
     wpe_view_map(WPE_VIEW(wpeView_));
 }
 

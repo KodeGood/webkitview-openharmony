@@ -27,5 +27,7 @@ G_BEGIN_DECLS
 G_DECLARE_FINAL_TYPE (WPEToplevelOHOS, wpe_toplevel_ohos, WPE, TOPLEVEL_OHOS, WPEToplevel)
 
 WPEToplevel* wpe_toplevel_ohos_new(WPEDisplay *display);
+// width and height are in physical pixels; the toplevel and its views get the logical size.
+void wpe_toplevel_ohos_set_physical_size(WPEToplevelOHOS* toplevel, int width, int height);
 
 G_END_DECLS

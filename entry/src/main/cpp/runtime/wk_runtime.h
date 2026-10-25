@@ -98,6 +98,8 @@ private:
     std::vector<PendingInvoke> pendingInvokes_;
 
     WPEDisplay* wpeDisplay_ = nullptr;
+    uint32_t displayChangeListener_ = 0;
+    bool displayChangeListenerRegistered_ = false;
 
     std::unordered_map<std::string, OH_NativeXComponent*> nativeXComponentMap_;
     std::unordered_map<std::string, WKWebView*> wkWebViewMap_;

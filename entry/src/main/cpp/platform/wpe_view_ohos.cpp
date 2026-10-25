@@ -194,14 +194,6 @@ WPEView* wpe_view_ohos_new(WPEDisplay* display)
     return WPE_VIEW(g_object_new(WPE_TYPE_VIEW_OHOS, "display", display, nullptr));
 }
 
-void wpe_view_ohos_resize( WPEViewOHOS* view, int width, int height)
-{
-    g_return_if_fail(WPE_IS_VIEW_OHOS(view));
-
-    LOGD("WPEViewOHOS::resize(%p, %d, %d)", view, width, height);
-    wpe_view_resized(WPE_VIEW(view), width, height);
-}
-
 void wpe_view_ohos_set_renderer(WPEViewOHOS* view, std::shared_ptr<WPEViewOHOSRenderer> renderer)
 {
     g_return_if_fail(WPE_IS_VIEW_OHOS(view));
@@ -234,6 +226,8 @@ void wpe_view_ohos_dispatch_touch_event(WPEViewOHOS* view, OH_NativeXComponent_T
             break;
     }
 
+    // XComponent reports physical pixels, WPE events are in logical pixels.
+    double scale = wpe_view_get_scale(WPE_VIEW(view));
     for (int i=0; i < event->numPoints; i++) {
         auto* wpeEvent = wpe_event_touch_new(
             eventType,
@@ -242,8 +236,8 @@ void wpe_view_ohos_dispatch_touch_event(WPEViewOHOS* view, OH_NativeXComponent_T
             event->timeStamp,
             static_cast<WPEModifiers>(0),
             event->id,
-            event->touchPoints[i].x,
-            event->touchPoints[i].y
+            event->touchPoints[i].x / scale,
+            event->touchPoints[i].y / scale
         );
         wpe_view_event(WPE_VIEW(view), wpeEvent);
         wpe_event_unref(wpeEvent);

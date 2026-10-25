@@ -21,6 +21,7 @@
 #include <AbilityKit/ability_runtime/application_context.h>
 #include <ace/xcomponent/native_interface_xcomponent.h>
 #include <glib.h>
+#include <window_manager/oh_display_manager.h>
 #include <wpe/webkit.h>
 
 #include <string>
@@ -31,6 +32,7 @@
 #include "message_pump.h"
 
 #include "platform/wpe_display_ohos.h"
+#include "platform/wpe_screen_ohos.h"
 #include "wk_web_view.h"
 
 // On OHOS, WebKit owns process launching (UIProcess/Launcher/ohos/ProcessLauncherOHOS.cpp):
@@ -109,6 +111,9 @@ WKRuntime::~WKRuntime()
     }
     wkWebViewMap_.clear();
 
+    if (displayChangeListenerRegistered_)
+        OH_NativeDisplayManager_UnregisterDisplayChangeListener(displayChangeListener_);
+
     messagePump_ = nullptr;
     uiReady_.store(false, std::memory_order_release);
 }
@@ -154,6 +159,18 @@ void WKRuntime::DoInitialize(uv_loop_t* loop)
         FailInitialize();
         return;
     }
+
+    // Like the display size setting on Android, the density can change at runtime; the screen
+    // reads it again and the toplevels follow its scale.
+    displayChangeListenerRegistered_ = OH_NativeDisplayManager_RegisterDisplayChangeListener(
+        [](uint64_t) {
+            WKRuntime::Invoke([](void*) {
+                if (auto* screen = wpe_display_get_screen(WKRuntime::GetWPEDisplay(), 0))
+                    wpe_screen_ohos_update(WPE_SCREEN_OHOS(screen));
+            }, nullptr, nullptr);
+        }, &displayChangeListener_) == DISPLAY_MANAGER_OK;
+    if (!displayChangeListenerRegistered_)
+        LOGE("WKRuntime::DoInitialize - failed to register the display change listener");
 
     // Load-bearing: this is the first WTF-touching WebKit call, made on the
     // ArkTS thread with no thread-default GMainContext pushed. It triggers

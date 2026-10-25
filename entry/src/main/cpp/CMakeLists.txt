@@ -16,6 +16,7 @@ find_library(IPC_LIB   NAMES ipc_capi REQUIRED)
 find_library(CHILDPROC_LIB NAMES child_process REQUIRED)
 find_library(NATIVE_BUFFER_LIB NAMES native_buffer REQUIRED)
 find_library(NATIVE_WINDOW_LIB NAMES native_window REQUIRED)
+find_library(NATIVE_DISPLAY_MANAGER_LIB NAMES native_display_manager REQUIRED)
 find_library(EGL_LIB  NAMES EGL REQUIRED)
 find_library(GLES3_LIB NAMES GLESv3 REQUIRED)
 find_library(ABILITY_RUNTIME_LIB NAMES ability_runtime REQUIRED)
@@ -34,6 +35,7 @@ add_library(webkitview SHARED
   platform/gles3/wpe_view_ohos_gles3_renderer.cpp
   platform/wpe_display_ohos.cpp
   platform/wpe_input_method_context_ohos.cpp
+  platform/wpe_screen_ohos.cpp
   platform/wpe_toplevel_ohos.cpp
   platform/wpe_view_ohos.cpp
   runtime/message_pump.cpp
@@ -57,6 +59,7 @@ target_link_libraries(webkitview
     ${CHILDPROC_LIB}
     ${NATIVE_BUFFER_LIB}
     ${NATIVE_WINDOW_LIB}
+    ${NATIVE_DISPLAY_MANAGER_LIB}
     ${EGL_LIB}
     ${GLES3_LIB}
     ${ABILITY_RUNTIME_LIB}

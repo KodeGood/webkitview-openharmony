@@ -32,7 +32,6 @@ G_DECLARE_FINAL_TYPE(WPEViewOHOS, wpe_view_ohos, WPE, VIEW_OHOS, WPEView)
 
 
 WPEView* wpe_view_ohos_new(WPEDisplay* display);
-void wpe_view_ohos_resize(WPEViewOHOS* view, int width, int height);
 void wpe_view_ohos_set_renderer(WPEViewOHOS* view, std::shared_ptr<WPEViewOHOSRenderer> renderer);
 void wpe_view_ohos_dispatch_touch_event(WPEViewOHOS* view, OH_NativeXComponent_TouchEvent* event);
 

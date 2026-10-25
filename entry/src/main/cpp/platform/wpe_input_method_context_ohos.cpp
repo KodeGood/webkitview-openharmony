@@ -432,7 +432,9 @@ static void wpeInputMethodContextOHOSSetCursorArea(WPEInputMethodContext* contex
     if (!self->imProxy)
         return;
 
-    InputMethod_CursorInfo* cursorInfo = OH_CursorInfo_Create(x, y, width, height);
+    // WebKit reports logical pixels, the input method expects physical ones.
+    double scale = wpe_view_get_scale(wpe_input_method_context_get_view(context));
+    InputMethod_CursorInfo* cursorInfo = OH_CursorInfo_Create(x * scale, y * scale, width * scale, height * scale);
     OH_InputMethodProxy_NotifyCursorUpdate(self->imProxy, cursorInfo);
     OH_CursorInfo_Destroy(cursorInfo);
 }

@@ -23,6 +23,7 @@
 #include "log.h"
 
 #include "platform/wpe_input_method_context_ohos.h"
+#include "platform/wpe_screen_ohos.h"
 #include "platform/wpe_toplevel_ohos.h"
 #include "platform/wpe_view_ohos.h"
 
@@ -30,6 +31,7 @@ struct _WPEDisplayOHOS {
     WPEDisplay parent;
 
     EGLDisplay eglDisplay;
+    WPEScreen* screen;
 };
 
 G_DEFINE_FINAL_TYPE(WPEDisplayOHOS, wpe_display_ohos, WPE_TYPE_DISPLAY)
@@ -58,8 +60,19 @@ static gboolean WPEDisplayOHOSConnect(WPEDisplay* display, GError** error)
 
     LOGD("WPEDisplayAndroid::get_egl_display - EGL initialized: version %{public}d.%{public}d", major, minor);
     displayOHOS->eglDisplay = eglDisplay;
+    displayOHOS->screen = wpe_screen_ohos_new();
 
     return TRUE;
+}
+
+static guint WPEDisplayOHOSGetNScreens(WPEDisplay* display)
+{
+    return WPE_DISPLAY_OHOS(display)->screen ? 1 : 0;
+}
+
+static WPEScreen* WPEDisplayOHOSGetScreen(WPEDisplay* display, guint index)
+{
+    return index == 0 ? WPE_DISPLAY_OHOS(display)->screen : nullptr;
 }
 
 static WPEView* WPEDisplayOHOSCreateView(WPEDisplay* display)
@@ -127,6 +140,7 @@ static void WPEDisplayOHOSDispose(GObject* object)
 
     auto* displayOHOS = WPE_DISPLAY_OHOS(object);
 
+    g_clear_object(&displayOHOS->screen);
     if (displayOHOS->eglDisplay != nullptr) {
         eglTerminate(displayOHOS->eglDisplay);
         displayOHOS->eglDisplay = nullptr;
@@ -155,6 +169,8 @@ static void wpe_display_ohos_class_init(WPEDisplayOHOSClass* klass)
     WPEDisplayClass* displayClass = WPE_DISPLAY_CLASS(klass);
     displayClass->connect = WPEDisplayOHOSConnect;
     displayClass->create_view = WPEDisplayOHOSCreateView;
+    displayClass->get_n_screens = WPEDisplayOHOSGetNScreens;
+    displayClass->get_screen = WPEDisplayOHOSGetScreen;
     displayClass->get_egl_display = WPEDisplayOHOSGetEGLDisplay;
 #if WPE_PLATFORM_CHECK_VERSION(2, 51, 3)
     displayClass->get_preferred_buffer_formats = WPEDisplayOHOSGetPreferredBufferFormats;
