@@ -115,7 +115,7 @@ WebKitView requires WebKit to be built and installed as a sysroot in your projec
 To automate this setup, run:
 
 ```bash
-python3 tools/bootstrap.py -a arm64 install --vcpkg <path-to-your-webkit>/WebKitBuild/OHOS/Release/dist
+python3 tools/bootstrap.py -a arm64 install <path-to-your-webkit>/WebKitBuild/OHOS/Release/dist
 ```
 
 ## Building and Running the WebKitView Application
