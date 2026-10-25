@@ -22,8 +22,6 @@
 
 #include "platform/wpe_view_ohos_renderer.h"
 
-#include <wpe-platform/wpe/WPEBufferOHOS.h>
-
 struct _WPEViewOHOS {
     WPEView parent;
 
@@ -89,17 +87,10 @@ static void wpeViewOHOSConstructed(GObject* object)
         }
 
         if (viewOHOS->renderer) {
-#if WPE_PLATFORM_CHECK_VERSION(2, 51, 1)
             // WPEBuffer carries the explicit-sync fences for every buffer type.
             int acquireFenceFd = wpe_buffer_take_rendering_fence(viewOHOS->committedBuffer);
             int releaseFenceFd = viewOHOS->renderer->Render(eglImage, acquireFenceFd);
             wpe_buffer_set_release_fence(viewOHOS->committedBuffer, releaseFenceFd);
-#else
-            auto* ohosBuffer = WPE_BUFFER_OHOS(viewOHOS->committedBuffer);
-            int acquireFenceFd = wpe_buffer_ohos_take_rendering_fence(ohosBuffer);
-            int releaseFenceFd = viewOHOS->renderer->Render(eglImage, acquireFenceFd);
-            wpe_buffer_ohos_set_release_fence(ohosBuffer, releaseFenceFd);
-#endif
         }
 
         if (notifyBufferRendered)

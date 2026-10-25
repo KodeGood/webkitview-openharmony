@@ -104,15 +104,9 @@ lands in `WebKitBuild/OHOS/Release/dist`. See
 [`WebKitLibraries/ohos/README.md`](https://github.com/KodeGood/WebKit/blob/wpewebkit-2.54.2-ohos/WebKitLibraries/ohos/README.md)
 for host prerequisites and build options.
 
-Branches:
-
-- [`wpewebkit-2.54.2-ohos`](https://github.com/KodeGood/WebKit/tree/wpewebkit-2.54.2-ohos) — WPE WebKit 2.54.2 with the OpenHarmony patches (**default**).
-- [`wpewebkit-2.53.3-ohos`](https://github.com/KodeGood/WebKit/tree/wpewebkit-2.53.3-ohos) — the previous WPE WebKit 2.53.3 based port.
-- [`wpewebkit-2.52.6-ohos`](https://github.com/KodeGood/WebKit/tree/wpewebkit-2.52.6-ohos) — the older WPE WebKit 2.52.6 based port.
-- [`wpewebkit-2.51.93-ohos`](https://github.com/KodeGood/WebKit/tree/wpewebkit-2.51.93-ohos) — the older WPE WebKit 2.51.93 based port.
-- [`wpewebkit-2.50.0-ohos`](https://github.com/KodeGood/WebKit/tree/wpewebkit-2.50.0-ohos) — the older WPE WebKit 2.50.0 based port.
-
-WebKitView builds against any of these branches.
+WebKitView builds against the
+[`wpewebkit-2.54.2-ohos`](https://github.com/KodeGood/WebKit/tree/wpewebkit-2.54.2-ohos) branch
+(WPE WebKit 2.54.2 with the OpenHarmony patches); older branches are not supported.
 
 ## Bootstrapping WebKitView with WebKit
 

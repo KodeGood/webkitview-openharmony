@@ -93,25 +93,7 @@ static gpointer WPEDisplayOHOSGetEGLDisplay(WPEDisplay* display, GError** error)
     return WPE_DISPLAY_OHOS(display)->eglDisplay;
 }
 
-// WPEPlatform 2.51.3 renamed WPEBufferDMABufFormats to WPEBufferFormats (the format list is no
-// longer DMA-BUF specific) and the display vfunc to get_preferred_buffer_formats.
-#if WPE_PLATFORM_CHECK_VERSION(2, 51, 3)
-#define WPEDisplayOHOSFormats WPEBufferFormats
-#define wpe_ohos_formats_builder_new wpe_buffer_formats_builder_new
-#define wpe_ohos_formats_builder_append_group wpe_buffer_formats_builder_append_group
-#define wpe_ohos_formats_builder_append_format wpe_buffer_formats_builder_append_format
-#define wpe_ohos_formats_builder_end wpe_buffer_formats_builder_end
-#define WPE_OHOS_FORMAT_USAGE_RENDERING WPE_BUFFER_FORMAT_USAGE_RENDERING
-#else
-#define WPEDisplayOHOSFormats WPEBufferDMABufFormats
-#define wpe_ohos_formats_builder_new wpe_buffer_dma_buf_formats_builder_new
-#define wpe_ohos_formats_builder_append_group wpe_buffer_dma_buf_formats_builder_append_group
-#define wpe_ohos_formats_builder_append_format wpe_buffer_dma_buf_formats_builder_append_format
-#define wpe_ohos_formats_builder_end wpe_buffer_dma_buf_formats_builder_end
-#define WPE_OHOS_FORMAT_USAGE_RENDERING WPE_BUFFER_DMA_BUF_FORMAT_USAGE_RENDERING
-#endif
-
-static WPEDisplayOHOSFormats* WPEDisplayOHOSGetPreferredBufferFormats(WPEDisplay* /*display*/)
+static WPEBufferFormats* WPEDisplayOHOSGetPreferredBufferFormats(WPEDisplay* /*display*/)
 {
     LOGD("WPEDisplayOHOS::get_preferred_buffer_formats");
     static const struct {
@@ -124,14 +106,14 @@ static WPEDisplayOHOSFormats* WPEDisplayOHOSGetPreferredBufferFormats(WPEDisplay
      //   {0x36314752, 0}, // DRM_FORMAT_RGB565
     };
 
-    auto* builder = wpe_ohos_formats_builder_new(nullptr);
-    wpe_ohos_formats_builder_append_group(builder, nullptr, WPE_OHOS_FORMAT_USAGE_RENDERING);
+    auto* builder = wpe_buffer_formats_builder_new(nullptr);
+    wpe_buffer_formats_builder_append_group(builder, nullptr, WPE_BUFFER_FORMAT_USAGE_RENDERING);
 
     for (const auto& format : formats) {
-        wpe_ohos_formats_builder_append_format(builder, format.fourcc, format.modifier);
+        wpe_buffer_formats_builder_append_format(builder, format.fourcc, format.modifier);
     }
 
-    return wpe_ohos_formats_builder_end(builder);
+    return wpe_buffer_formats_builder_end(builder);
 }
 
 static void WPEDisplayOHOSDispose(GObject* object)
@@ -172,11 +154,7 @@ static void wpe_display_ohos_class_init(WPEDisplayOHOSClass* klass)
     displayClass->get_n_screens = WPEDisplayOHOSGetNScreens;
     displayClass->get_screen = WPEDisplayOHOSGetScreen;
     displayClass->get_egl_display = WPEDisplayOHOSGetEGLDisplay;
-#if WPE_PLATFORM_CHECK_VERSION(2, 51, 3)
     displayClass->get_preferred_buffer_formats = WPEDisplayOHOSGetPreferredBufferFormats;
-#else
-    displayClass->get_preferred_dma_buf_formats = WPEDisplayOHOSGetPreferredBufferFormats;
-#endif
     displayClass->create_input_method_context = WPEDisplayOHOSCreateInputMethodContext;
     displayClass->use_explicit_sync = WPEDisplayOHOSUseExplicitSync;
 }
