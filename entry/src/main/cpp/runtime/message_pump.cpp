@@ -19,6 +19,7 @@
 #include "message_pump.h"
 
 #include <cstdlib>
+#include <sys/stat.h>
 
 #include "log.h"
 
@@ -106,10 +107,8 @@ MessagePump::~MessagePump()
     // could re-deliver stale revents, and running arbitrary WebKit callbacks
     // during teardown (after WKRuntime has deleted its views) is unsafe.
 
-    for (auto& entry : m_pollHandles) {
-        uv_poll_stop(entry.second);
-        uv_close(reinterpret_cast<uv_handle_t*>(entry.second), &MessagePump::onPollClose);
-    }
+    for (auto& entry : m_pollHandles)
+        closePollHandle(entry.second);
     m_pollHandles.clear();
 
     uv_prepare_stop(m_prepare);
@@ -202,55 +201,95 @@ void MessagePump::prepare() noexcept
     for (gint i = 0; i < m_pollFdsSize; ++i)
         m_pollFds[i].revents = 0;
 
-    updatePollHandles();
+    updatePollHandles(timeout);
 
     // Bound the poll wait by the GLib timeout. timeout < 0 means "wait
     // forever" (until an fd fires); timeout == 0 means "dispatch immediately".
-    if (timeout < 0)
+    if (timeout < 0) {
         uv_timer_stop(m_timer);
-    else
-        uv_timer_start(m_timer, &MessagePump::onTimer, static_cast<uint64_t>(timeout), 0);
+        return;
+    }
+
+    // On the OHOS main thread every uv_timer_start() also wakes the loop (so
+    // the embedding EventHandler re-reads uv_backend_timeout()), so re-arming
+    // on each iteration would keep the loop running forever. A timer already
+    // due no later than the new deadline wakes us in time; firing early only
+    // costs one empty iteration.
+    const uint64_t deadline = uv_now(m_loop) + static_cast<uint64_t>(timeout);
+    if (uv_is_active(reinterpret_cast<uv_handle_t*>(m_timer)) && m_timerDeadline <= deadline)
+        return;
+    uv_timer_start(m_timer, &MessagePump::onTimer, static_cast<uint64_t>(timeout), 0);
+    m_timerDeadline = deadline;
 }
 
-void MessagePump::updatePollHandles() noexcept
+void MessagePump::closePollHandle(uv_poll_t* handle) noexcept
 {
-    // Desired fd -> combined GLib events for this iteration.
-    std::unordered_map<int, gushort> desired;
-    for (gint i = 0; i < m_pollFdsSize; ++i)
-        desired[m_pollFds[i].fd] |= m_pollFds[i].events;
+    uv_poll_stop(handle);
+    uv_close(reinterpret_cast<uv_handle_t*>(handle), &MessagePump::onPollClose);
+}
 
-    // Drop handles for fds GLib no longer polls.
+void MessagePump::updatePollHandles(gint timeout) noexcept
+{
+    // Only touch handles whose fd or event mask changed: every uv_poll_start
+    // is an EPOLL_CTL_DEL plus a re-ADD, and a re-armed watcher makes
+    // uv_backend_timeout() return 0, so the EventHandler that embeds the uv
+    // loop would re-run it immediately instead of sleeping until the timeout.
+    m_desiredEvents.clear();
+    for (gint i = 0; i < m_pollFdsSize; ++i)
+        m_desiredEvents[m_pollFds[i].fd] |= m_pollFds[i].events;
+
+    // With a source ready (timeout == 0) GLib leaves out the fds of
+    // lower-priority sources, so a missing fd is not necessarily gone; keep
+    // its handle rather than churning it until the next full poll set.
+    const bool pollSetIsComplete = timeout != 0;
+
     for (auto it = m_pollHandles.begin(); it != m_pollHandles.end();) {
-        if (desired.find(it->first) == desired.end()) {
-            uv_poll_stop(it->second);
-            uv_close(reinterpret_cast<uv_handle_t*>(it->second), &MessagePump::onPollClose);
-            it = m_pollHandles.erase(it);
-        } else {
+        auto* ctx = static_cast<PollContext*>(it->second->data);
+        bool keep = !pollSetIsComplete || m_desiredEvents.find(it->first) != m_desiredEvents.end();
+        if (keep) {
+            // A closed fd leaves epoll, so a reused fd number must be
+            // registered again even though the number and mask are the same.
+            struct stat st;
+            keep = fstat(it->first, &st) == 0 && st.st_dev == ctx->dev && st.st_ino == ctx->ino;
+        }
+        if (keep) {
             ++it;
+        } else {
+            closePollHandle(it->second);
+            it = m_pollHandles.erase(it);
         }
     }
 
-    // Add new fds and (re)arm existing ones with the current event mask.
-    for (const auto& entry : desired) {
+    for (const auto& entry : m_desiredEvents) {
         const int fd = entry.first;
         const int uvEvents = glibEventsToUvEvents(entry.second);
 
         uv_poll_t* handle = nullptr;
         auto it = m_pollHandles.find(fd);
         if (it == m_pollHandles.end()) {
+            struct stat st;
+            if (fstat(fd, &st) != 0) {
+                LOGE("MessagePump: fstat failed for fd %{public}d", fd);
+                continue;
+            }
             handle = static_cast<uv_poll_t*>(std::calloc(1, sizeof(uv_poll_t)));
             if (uv_poll_init(m_loop, handle, fd) != 0) {
                 LOGE("MessagePump: uv_poll_init failed for fd %{public}d", fd);
                 std::free(handle);
                 continue;
             }
-            handle->data = new PollContext { this, fd };
+            handle->data = new PollContext { this, fd, 0, st.st_dev, st.st_ino };
             uv_unref(reinterpret_cast<uv_handle_t*>(handle));
             m_pollHandles.emplace(fd, handle);
         } else {
             handle = it->second;
         }
-        uv_poll_start(handle, uvEvents, &MessagePump::onPoll);
+
+        auto* ctx = static_cast<PollContext*>(handle->data);
+        if (ctx->uvEvents != uvEvents) {
+            uv_poll_start(handle, uvEvents, &MessagePump::onPoll);
+            ctx->uvEvents = uvEvents;
+        }
     }
 }
 

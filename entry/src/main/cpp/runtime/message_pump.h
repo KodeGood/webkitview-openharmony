@@ -19,6 +19,7 @@
 #pragma once
 
 #include <glib.h>
+#include <sys/types.h>
 #include <uv.h>
 
 #include <unordered_map>
@@ -63,7 +64,7 @@ public:
 private:
     void prepare() noexcept;
     void dispatch() noexcept;
-    void updatePollHandles() noexcept;
+    void updatePollHandles(gint timeout) noexcept;
 
     static void onPrepare(uv_prepare_t* handle);
     static void onCheck(uv_check_t* handle);
@@ -77,7 +78,15 @@ private:
     struct PollContext {
         MessagePump* pump;
         int fd;
+        // Event mask last passed to uv_poll_start, 0 before the first start.
+        int uvEvents;
+        // Identity of the file the handle was registered for, to detect the fd
+        // number being closed and reused between iterations.
+        dev_t dev;
+        ino_t ino;
     };
+
+    void closePollHandle(uv_poll_t* handle) noexcept;
 
     uv_loop_t* m_loop = nullptr;
     GMainContext* m_context = nullptr;
@@ -85,6 +94,8 @@ private:
     uv_prepare_t* m_prepare = nullptr;
     uv_check_t* m_check = nullptr;
     uv_timer_t* m_timer = nullptr;
+    // uv_now()-based deadline m_timer was last started for.
+    uint64_t m_timerDeadline = 0;
     // Wakes the uv loop from outside an iteration: needed once at construction
     // (nothing else triggers the first uv_run on the EventHandler-embedded main
     // loop) and after same-thread source attachment (which GLib does not signal
@@ -98,4 +109,7 @@ private:
 
     // fd -> uv_poll handle currently registered with the loop.
     std::unordered_map<int, uv_poll_t*> m_pollHandles;
+    // fd -> combined GLib events of the current iteration; a member only to
+    // reuse its storage.
+    std::unordered_map<int, gushort> m_desiredEvents;
 };
