@@ -63,7 +63,6 @@ SDK_LINKING_LIBS_DEFAULT = {
     "libgmodule-2.0.so",
     "libintl.so",
     "libsoup-3.0.so",
-    "libwpe-1.0.so",
     "libWPEWebKit-2.0.so"
 }
 
@@ -365,9 +364,7 @@ class Bootstrap:
         Populate .webkit/<version>/<abi>/{sdk,runtime} directly from a vcpkg dist/ tree.
 
         vcpkg's .pc files are relocatable (prefix=${pcfiledir}/../..), so the SDK works wherever
-        it lands — no prefix rewriting needed. libwpe is built static (folded into the fat
-        libWPEWebKit-2.0.so), so there is no libwpe-1.0.so; we add a compat symlink in sdk/lib so
-        the wpe-1.0.pc `-lwpe-1.0` resolves to the fat lib (which exports the wpe_* API).
+        it lands — no prefix rewriting needed.
         """
         dist = Path(self._vcpkg_dist_path)
         dist_lib = dist / "lib"
@@ -418,30 +415,9 @@ class Bootstrap:
                 print(f"[vcpkg] sdk/lib/{sub.name} <- {sub}")
                 shutil.copytree(sub, sdk / "lib" / sub.name, symlinks=True, dirs_exist_ok=True)
 
-        self._make_folded_lib_compat_symlinks(sdk / "lib")
-
         self._update_current(self._current_link, self._version_dir)
         self._write_symbolize_lib_paths()
         print("Done.")
-
-    # Libraries that the wpe-webkit-2.0 pkg-config chain links (`-l<name>`) but which are built
-    # static and folded into the fat libWPEWebKit-2.0.so (so no standalone .so ships). A compat
-    # symlink lets the linker resolve `-l<name>` to the fat lib: for wpe its wpe_* API is
-    # exported; xkbcommon's symbols are internal to WebKit and not referenced by the consumer, so
-    # the symlink just satisfies the flag with no undefined symbols at link or runtime.
-    _FOLDED_COMPAT_LIBS = ("libwpe-1.0.so", "libxkbcommon.so")
-
-    def _make_folded_lib_compat_symlinks(self, lib_dir: Path):
-        fat_name = "libWPEWebKit-2.0.so"
-        if not (lib_dir / fat_name).exists():
-            print(f"[vcpkg][warn] {lib_dir/fat_name} missing; skipping folded-lib compat symlinks")
-            return
-        for name in self._FOLDED_COMPAT_LIBS:
-            link = lib_dir / name
-            if link.is_symlink() or link.exists():
-                continue  # a real .so shipped (e.g. built dynamic) — don't shadow it
-            os.symlink(fat_name, link)
-            print(f"[vcpkg] sdk/lib/{name} -> {fat_name} (compat)")
 
     def make_current(self, version: str):
         """Flip .webkit/current -> <version> and relink entry/libs/<abi>."""
