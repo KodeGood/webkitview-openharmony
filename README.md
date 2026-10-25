@@ -149,7 +149,6 @@ AUTOSIGN_DIR=.autosign-release ./install-webkitview
 - Only websites included in the demo app bookmark list work reliably.  
 - Video playback works (e.g. YouTube), but some GStreamer plugins fail to load because their helper libraries are not packaged yet; this includes the MP4 demuxer, so MP4 media may not play.  
 - IME works (typing, composition, Enter, caret movement, select-all), but cut/copy/paste don't work yet (no clipboard backend) and the candidate window may be placed incorrectly.  
-- WebGL is not supported.  
 - Performance is not yet optimized.  
 - High memory usage may cause the system to terminate the app. WebKit's memory pressure monitor is disabled on OpenHarmony, so WebKit doesn't react to low memory.  
 - Scrolling performance is not smooth.  
