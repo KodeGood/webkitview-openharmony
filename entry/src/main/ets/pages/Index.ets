@@ -27,16 +27,18 @@ interface Bookmark {
 @Component
 struct Index {
   private webkit: WebKitInterface | undefined = undefined;
-  private readonly defaultUrl: string = 'https://www.youtube.com/watch?v=YE7VzlLtp-4'
-  
+
+  private readonly defaultUrl: string = 'https://duckduckgo.com'
+
   @State urlToLoad: string = ''
   @State showBookmarks: boolean = false
 
   private readonly bookmarks: Bookmark[] = [
-    { title: 'WPEWebKit',           url: 'https://www.wpewebkit.org' },
-    { title: 'WebKit',              url: 'https://webkit.org' },
-    { title: 'Hacker News',         url: 'https://news.ycombinator.com' },
-    { title: 'UserAgentString',     url: 'https://www.useragentstring.com' }
+    { title: 'DuckDuckGo',         url: 'https://duckduckgo.com' },
+    { title: 'WPEWebKit',          url: 'https://wpewebkit.org' },
+    { title: 'WebKit',             url: 'https://webkit.org' },
+    { title: 'Aquarium',           url: 'https://webglsamples.org/aquarium/aquarium.html' },
+    { title: 'Big Buck Bunny',     url: 'https://www.youtube.com/watch?v=YE7VzlLtp-4' }
   ]
 
   private loadBookmark(bm: Bookmark): void {
